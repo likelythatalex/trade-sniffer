@@ -1,0 +1,18 @@
+# Python Data & Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Environment
+.env
+venv/
+quant_screener/
+
+# Quantitative Pipeline Data (DO NOT UPLOAD TO GIT)
+data/*.parquet
+plots/*.png
+logs/*.log
+
+# You MAY want to track your journal, but usually, it's ignored to prevent merge conflicts
+# journal/trading_journal.csv
