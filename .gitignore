@@ -1,0 +1,39 @@
+# --- Secrets / environment ---
+# Webhook URLs and any tokens come from env vars / GitHub Secrets, never the repo.
+.env
+.env.*
+*.local
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+
+# --- Generated scanner output ---
+# Dated HTML dashboards, watchlists, and cached data are regenerated each run.
+# signals.csv is intentionally NOT ignored: it's the backtesting/calibration dataset.
+output/report_*.html
+output/latest*.html
+output/watchlist_*.txt
+data_cache/
+*.cache
+
+# --- IDE / editor ---
+.vscode/
+.idea/
+*.swp
+
+# --- OS noise ---
+Thumbs.db
+.DS_Store

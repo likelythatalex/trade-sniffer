@@ -1,0 +1,3 @@
+# Normalize line endings: store LF in the repo, check out native on each OS.
+# Prevents noisy CRLF/LF diffs when the repo is touched from Windows + CI (Linux).
+* text=auto
