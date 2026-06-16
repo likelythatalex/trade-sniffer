@@ -1,5 +1,19 @@
 # Appendix — Concepts, Acronyms & Implementation Status
 
+<!--
+CHANGE-MARK (refinement pass, aligned to SPEC §6.1/§6.4):
+  • "Climax" entry: implementation line corrected — climax feeds the volume sub-score and
+    range *context*, it does NOT set the range boundary in v1 (the band does); climax-anchored
+    boundaries are FUTURE.
+  • "Trading Range / Phases" entry: boundary method stated as the v1 support/resistance band.
+  Final parameterization pass:
+  • "No Demand / No Supply" entry: rolling-median form + near-extreme (range thirds).
+  • "Spring / Upthrust" entry: cites spring_lookback / spring_snapback_bars / spring_wick_pct.
+  • §D calibration table: added range_extreme_fraction, spring_lookback/snapback, trend_lookback,
+    no_demand_supply_median_window; "prev N" reframed as source-note only.
+  Status tags unchanged (still pre-implementation). No other entries altered.
+-->
+
 A living reference for the trading/market concepts this project uses, what they mean in
 plain terms, and **how (or whether) this codebase implements them.** Updated with each
 version. Think of it as a README for the *domain*, not the code.
@@ -74,31 +88,38 @@ version. Think of it as a README for the *domain*, not the code.
 ### No Demand / No Supply
 - **Plain meaning:** A narrow-range bar on low volume into resistance (no demand) or support
   (no supply) — a weak push that often fails.
-- **How it's implemented here:** Relative-feature condition (narrow `spread_atr`, low
-  `volume_ratio`, directional). Methodology §2.2.
+- **How it's implemented here:** Relative-feature condition — narrow `spread_atr` + volume
+  **below the rolling median** (`no_demand_supply_median_window`), directional, near a range
+  extreme (`range_extreme_fraction` thirds, SPEC §6.1). Median form chosen over "prev N bars"
+  for universe stability. Methodology §2.2.
 - **Status:** `PLANNED`.
 
 ### Climax (selling / buying)
 - **Plain meaning:** A volume peak that marks exhaustion of a move, often preceding a
   reversal and the start of a range.
-- **How it's implemented here:** Rolling `volume_pctile` max + reversal check; climax levels
-  anchor range boundaries. Methodology §2.3.
+- **How it's implemented here:** Rolling `volume_pctile` max + reversal check. Climax feeds
+  the `volume_behavior` sub-score and provides *context* for range scoring; in v1 it does
+  **not** set the range boundary — the support/resistance band does (SPEC §6.1). Climax-
+  anchored boundaries are a FUTURE refinement. Methodology §2.3.
 - **Status:** `PLANNED`.
 
 ### Spring / Upthrust
 - **Plain meaning:** A false breakdown below support (spring, bullish) or false breakout
   above resistance (upthrust, bearish) that snaps back into the range — a classic Wyckoff
   trap of the uninformed.
-- **How it's implemented here:** New low/high vs. lookback + close back inside range, volume
-  corroboration bonus. Methodology §2.4.
+- **How it's implemented here:** New low/high vs. `spring_lookback` range + close back inside
+  within `spring_snapback_bars` on a `spring_wick_pct` rejection wick, volume corroboration
+  bonus. Methodology §2.4.
 - **Status:** `PLANNED`.
 
 ### Trading Range / Phases (A–E)
 - **Plain meaning:** The consolidation where accumulation/distribution happens; Wyckoff
   subdivides it into phases A–E. Later phases (C/D/E) are where entries are favored;
   Phase-C spring/upthrust is the highest-reward, highest-risk spot.
-- **How it's implemented here:** Range detected and validated; phase context used as
-  *scoring bias* (e.g. favor later-phase setups), not asserted as a hard label.
+- **How it's implemented here:** Range **boundaries defined by a support/resistance band**
+  over `range_lookback` (v1 — SPEC §6.1), validated by `range_max_width_pct` /
+  `min_range_bars`. Phase context used as *scoring bias* (e.g. favor later-phase setups), not
+  asserted as a hard label. Climax-anchored boundaries are FUTURE.
 - **Status:** `PARTIAL`-by-design — range yes, full phase labeling intentionally not.
 
 ### Per-Stock Normalization (relative features)
@@ -133,7 +154,9 @@ version. Think of it as a README for the *domain*, not the code.
 - **Plain meaning:** Volume-based signals are only trustworthy on liquid names; thin stocks
   produce noise and aren't tradeable at size.
 - **How it's implemented here:** 20-day average dollar-volume + min-price gate at scan time;
-  illiquid names skipped with a logged reason.
+  illiquid names skipped with a logged reason. This is a universe-eligibility filter, so an
+  **absolute** floor is the correct tool here (the relative-threshold rule governs *signal*
+  thresholds, not universe gating).
 - **Status:** `PLANNED` (`universe.py`).
 
 ### Conviction Score / Confirmation Stacking
@@ -224,11 +247,14 @@ guessed once and forgotten. Listed here so they're not scattered. All currently 
 | baseline window (bars) | `features.py` / config | Rolling window for volume/spread normalization |
 | `high_volume_ratio`, `volume_pctile_high` | config (per-TF) | What counts as "high volume" |
 | `narrow_spread_atr`, `spread_pctile_*` | config (per-TF) | What counts as "narrow/wide spread" |
-| No Demand/Supply lookback `N` | config (per-TF) | "Lower than previous N bars" |
-| climax window + reaction magnitude | config (per-TF) | Climax detection sensitivity |
-| spring/upthrust lookback + snap-back bars | config (per-TF) | Structural-extreme detection |
+| `no_demand_supply_median_window` | config (per-TF) | Window for "volume below rolling median" (median form; "prev N" is source-note only) |
+| climax window + reaction magnitude (`climax_window`, `climax_reaction_atr`) | config (per-TF) | Climax detection sensitivity |
+| `spring_lookback`, `spring_snapback_bars`, `spring_wick_pct` | config (per-TF) | Structural-extreme (spring/upthrust) detection |
+| `range_extreme_fraction` | config (per-TF) | "Near support/resistance" = lower/upper fraction of the range (seed 0.33) |
+| `trend_lookback` | config (per-TF) | Prior up/down-trend window for trend-context (price vs. MA / net change) |
 | range validity (`range_max_width_pct`, `min_range_bars`) | config (per-TF) | What counts as a valid trading range |
 | sub-score weights | config | How signals combine into the Wyckoff score |
+| intra-sub-score signal weights | code (seed) / future config | Relative weight of signals within a sub-score (start equal; calibrate) |
 | `watchlist_threshold` | config | Score cutoff for making the report |
 
 ---
@@ -236,3 +262,10 @@ guessed once and forgotten. Listed here so they're not scattered. All currently 
 ## E. Changelog of this doc
 - *pre-implementation:* initial version; all domain entries `PLANNED`/`FUTURE`/`EXCLUDED`.
   Flip to `IMPLEMENTED`/`PARTIAL` as code lands, and update the version legend in the header.
+- *pre-implementation (refinement):* Climax + Trading Range entries reworded so the v1 range
+  boundary is the support/resistance band (climax = context/scoring, not boundary; climax-
+  anchored boundaries FUTURE); added intra-sub-score weights to §D. Status tags unchanged.
+- *pre-implementation (parameterization):* No Demand/Supply → rolling-median form + range-thirds
+  near-extreme; spring parameterized (spring_lookback/snapback); §D gains range_extreme_fraction,
+  trend_lookback, no_demand_supply_median_window. Trend-context = simple price-vs-MA (harmonic
+  rule FUTURE). Status tags unchanged.

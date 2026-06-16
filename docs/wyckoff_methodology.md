@@ -1,5 +1,21 @@
 # Wyckoff Methodology Reference
 
+<!--
+CHANGE-MARK (refinement pass, aligned to SPEC.md §6.1/§6.4 decisions):
+  • §3 reworded: v1 range BOUNDARY is the support/resistance band (per SPEC §6.1). Climax-
+    anchored boundaries demoted to [FUTURE]; climax informs scoring *within* the range only.
+  • §5: signal → sub-score mapping pinned as a first-pass (weights = calibration seeds),
+    mirroring SPEC §6.4. Other open items unchanged.
+  Final parameterization pass (aligned to SPEC §4.2 config + §6/§7):
+  • §2.2: No Demand/Supply [CHOICE] resolved to the rolling-median form ("prev N" kept as a
+    source note only); "near support/resistance" bound to the §6.1 range thirds.
+  • §2.4: spring parameterized with spring_lookback + spring_snapback_bars (+ spring_wick_pct).
+  • §4: v1 trend-context = simple trend_lookback price-vs-MA; harmonic (leg-segmentation) rule
+    demoted to [FUTURE]. §5 checklist updated.
+  Methodology numbers remain verifiable stubs ([VERIFY]/[TUNABLE]/[CHOICE]); seeds are
+  calibration starting points, nothing here is hardened into an asserted truth.
+-->
+
 The bridge between Wyckoff/VSA theory and `strategies/wyckoff.py`. This is the document the
 implementer reads to turn discretionary chart-reading into deterministic, testable rules.
 
@@ -70,12 +86,17 @@ candidates to confirm against the source.
 - **Directional read** depends on location in the range and `close_position`.
 
 ### 2.2 No Demand / No Supply
-- **No Demand (candidate):** narrow-range *up* bar with volume lower than the previous N
-  bars, near resistance → weak demand. `[VERIFY]` `[TUNABLE: N = 2]` `[CHOICE: "previous 2
-  bars" is one practitioner's specific; confirm and consider "below rolling median" as the
-  more universe-stable form]`
-- **No Supply (candidate):** narrow-range *down* bar with volume lower than the previous N
-  bars, near support → weak supply.
+- **No Demand:** narrow-range *up* bar with volume **below the rolling median**
+  (`no_demand_supply_median_window`), **near resistance** → weak demand.
+- **No Supply:** narrow-range *down* bar with volume below the rolling median, **near
+  support** → weak supply.
+- `[CHOICE — resolved]` We implement the **rolling-median** form (volume below the rolling
+  median), not "lower than the previous N bars." The median form is the universe-stable
+  version, consistent with the §1 normalization principle. The source's original
+  ("previous 2 bars", `[TUNABLE: N = 2]`) is retained here only for traceability; it is
+  **not** what ships. `[VERIFY]` the window against the source.
+- **"Near support/resistance"** is the §6.1 range-position output (lower/upper
+  `range_extreme_fraction` of the range, seed 0.33) — not a separate threshold (see SPEC §6.1).
 - These are clean, objective support/resistance tests — high value, low complexity.
 
 ### 2.3 Climax (selling / buying)
@@ -84,13 +105,14 @@ candidates to confirm against the source.
   "sharp reaction" magnitude]`
 - **Preliminary stop (candidate):** a sudden volume spike on a narrow-range bar during a
   clear trend (an early warning before the climax). `[VERIFY]`
-- Climax levels set the horizontal boundaries (automatic rally/reaction) used for range
-  detection in §3.
+- Climax characterization feeds the `volume_behavior` sub-score and provides *context* for
+  range scoring (§3). In v1 it does **not** set the range boundary (the band does).
 
 ### 2.4 Spring / Upthrust (structural extremes)
-- **Spring (candidate):** price makes a new low *relative to the lookback range* then closes
-  back inside the range, ideally on a volume/spread profile consistent with §2.1.
-  `[TUNABLE: lookback; max bars to close back inside; spring_wick_pct already in config]`
+- **Spring (candidate):** within `spring_lookback` bars, price makes a new low *relative to
+  the lookback range* then closes back inside the range within `spring_snapback_bars`,
+  ideally on a volume/spread profile consistent with §2.1.
+  `[TUNABLE: spring_lookback; spring_snapback_bars; spring_wick_pct — all per-TF config seeds]`
 - **Upthrust:** mirror image at the range high.
 - Bonus conviction when the false-break's volume behavior corroborates (e.g. spring on
   diminishing supply, recovery on rising demand).
@@ -99,8 +121,11 @@ candidates to confirm against the source.
 
 ## 3. Trading range & structure
 
-- **Range boundaries** are anchored off climax-driven automatic rally/reaction levels (§2.3)
-  rather than arbitrary highs/lows. `[VERIFY]`
+- **Range boundaries (v1):** the trading range is a support/resistance **band** detected over
+  `range_lookback` — this is the v1 boundary method (see SPEC §6.1). `[FUTURE]` Anchoring the
+  boundaries off climax-driven automatic rally/reaction levels (§2.3) is a planned refinement,
+  **not v1**. In v1, climax (§2.3) informs *scoring within* the range (range_structure context
+  + volume_behavior), it does not define the boundary. `[VERIFY]` (for the future method)
 - Range validity gates (`range_max_width_pct`, `min_range_bars`) already in config; confirm
   per-timeframe values (see open question on Daily-vs-Weekly lookback semantics).
 - **Phase context (used as bias, not as a hard label):** only treat accumulation as
@@ -117,9 +142,14 @@ These are interpretive guards from the source, translated to scoring rules:
 
 - **Context over patterns.** A signal unaccompanied by preceding trend-exhaustion context
   (e.g. a climax) is down-weighted — "a pattern without context is noise."
-- **The harmonic rule.** In a healthy trend, volume rises on impulse moves and falls on
-  corrections; a break (volume higher on a correction) flags a failing trend. Candidate
-  input to trend-context scoring. `[VERIFY]` `[TUNABLE]`
+- **Trend context (v1, simple).** Over `trend_lookback` bars, classify the prior trend by
+  price vs. a rising/falling N-period MA (equivalently the sign of net change). Accumulation
+  is favored after a prior downtrend, distribution after a prior uptrend; penalize setups
+  lacking the preceding move. `[TUNABLE: trend_lookback]`
+- **The harmonic rule `[FUTURE]`.** The fuller version — in a healthy trend volume rises on
+  impulse legs and falls on corrections, and a break (volume higher on a correction) flags a
+  failing trend — needs impulse/correction **leg segmentation** and is **not v1**. It is a
+  planned refinement to trend-context scoring. `[VERIFY]` `[TUNABLE]`
 - **Flexibility over rigid labels.** When structure doesn't fit a textbook cycle, fall back
   to the raw VSA absorption/exhaustion read rather than forcing a phase label. This is the
   core justification for scoring conviction instead of emitting a definitive phase.
@@ -129,10 +159,22 @@ These are interpretive guards from the source, translated to scoring rules:
 ## 5. Open methodology decisions (resolve during build)
 
 - [ ] Confirm every `[VERIFY]` number against the actual source (video/book), not the summary.
-- [ ] For each `[CHOICE]`, decide: adopt the practitioner's specific value, or use the more
-      universe-stable rolling-median/percentile form.
-- [ ] Decide which signals contribute to which Wyckoff sub-score (`range_structure`,
-      `volume_behavior`, `spring_upthrust`, `confirmation`) and with what relative weight.
+- [x] **No Demand/Supply `[CHOICE]` — resolved:** rolling-median form adopted (§2.2); the
+      source's "previous N bars" is kept as a traceability note only. For any *other*
+      `[CHOICE]` that arises, default to the universe-stable rolling-median/percentile form.
+- [x] **Trend context — resolved for v1:** simple `trend_lookback` price-vs-MA measure (§4);
+      the harmonic (impulse/correction leg) rule is `[FUTURE]`.
+- [x] **Signal → sub-score mapping — pinned (first-pass; weights are calibration seeds, NOT
+      final).** Each signal feeds exactly one sub-score; within a sub-score the signals start
+      at *equal* weight, each `[TUNABLE: calibration seed]` to be tuned against `signals.csv`.
+      Mirrors SPEC §6.4:
+      - `volume_behavior` (35): Effort-vs-Result (§2.1), No Demand / No Supply (§2.2), climax
+        volume characterization (§2.3)
+      - `spring_upthrust` (20): spring / upthrust + volume corroboration (§2.4)
+      - `range_structure` (25): range validity/quality + climax as *context* within the range
+      - `confirmation` (20): RS-vs-SPY, volatility contraction, MTF, trend context
+      Still open: the *intra*-sub-score weights (start equal; calibrate). The four top-level
+      `sub_weights` (25/35/20/20) live in config and are themselves tunable.
 - [ ] Per-timeframe parameter values (Daily vs Weekly) for every lookback/window above.
 - [ ] Whether `close_position` and `spread_pctile` are both needed or one is redundant
       (resolve empirically once `signals.csv` has data).
