@@ -1,0 +1,41 @@
+# Scheduled Wyckoff scan (SPEC §9). DRAFT scaffold — the run step calls the scanner,
+# which is not implemented yet, so for now use workflow_dispatch to test wiring only.
+# GitHub cron is UTC and not guaranteed to the minute.
+name: scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      timeframe:
+        description: "Timeframe to scan (daily or weekly)"
+        required: true
+        default: daily
+  schedule:
+    - cron: "0 22 * * 1-5"   # Daily: ~22:00 UTC on weekdays, after US close
+    - cron: "0 14 * * 6"     # Weekly: Saturday, after Friday close settles
+
+permissions:
+  contents: write            # commit output/ (report, watchlist, signals.csv) back to the repo
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # TODO: pick timeframe from schedule vs. dispatch input once scanner.py lands.
+      - name: Run scanner
+        env:
+          NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+          REPORT_BASE_URL: ${{ secrets.REPORT_BASE_URL }}
+        run: python -m src.scanner
+
+      # TODO: commit output/ back (report, watchlist, signals.csv) to preserve history.

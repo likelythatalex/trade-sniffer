@@ -1,0 +1,27 @@
+{# Wyckoff Scan dashboard — single file, no build step (SPEC §8.1).
+   STUB: layout/styling to be built in report.py's implementation pass.
+   Hard requirements to honor when fleshing this out:
+   - Accumulation (long) and Distribution (short) in separate, labeled sections.
+   - Ranked by composite score, descending, within each section.
+   - Per card: ticker + exchange-prefixed symbol, direction, composite score,
+     sub-score breakdown, plain-English reason tags, and an embedded TradingView
+     Advanced Chart widget (interval = output.embed_chart_interval[timeframe]).
+   - Lazy-load widgets (instantiate on scroll into view) so big reports stay snappy.
+   - Keep TradingView attribution VISIBLE (free-widget license requirement).
+   - References TradingView's hosted embed-widget-advanced-chart.js via <script>;
+     no API key. Needs network at view time for the widget only.
+   Context passed in (see report.render_dashboard): title, timeframe, generated_ts,
+   summary (counts), accumulation[], distribution[]. #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }} — {{ timeframe }} — {{ generated_ts }}</title>
+</head>
+<body>
+  <h1>{{ title }} — {{ timeframe }}</h1>
+  {# TODO: run summary, accumulation section, distribution section, TV widgets,
+     and the required TradingView attribution link. #}
+</body>
+</html>

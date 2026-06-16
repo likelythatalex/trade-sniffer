@@ -1,0 +1,2 @@
+# Keeps the output/ directory in git. Generated reports/watchlists are gitignored;
+# signals.csv is committed (it's the calibration/backtest dataset).

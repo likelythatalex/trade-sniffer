@@ -1,0 +1,10 @@
+# Runtime
+yfinance>=0.2.40        # market data (daily + native weekly)
+pandas>=2.2             # OHLCV frames + rolling features
+numpy>=1.26             # numerics under pandas
+PyYAML>=6.0             # config.yaml
+Jinja2>=3.1             # HTML dashboard template
+requests>=2.32          # Discord webhook
+
+# Dev / test
+pytest>=8.0

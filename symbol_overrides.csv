@@ -1,0 +1,6 @@
+# Optional ticker -> exchange corrections for the TradingView symbol prefix (D3).
+# Use only when yfinance metadata resolves the wrong (or no) exchange for a ticker.
+# Format: bare ticker, TV exchange code (e.g. NASDAQ, NYSE, AMEX). Example:
+# ticker,exchange
+# BRK-B,NYSE
+ticker,exchange

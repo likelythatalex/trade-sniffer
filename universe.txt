@@ -1,0 +1,17 @@
+# Ticker universe — one bare ticker per line (no exchange prefix; resolved at fetch time).
+# Lines starting with '#' and blank lines are ignored.
+# Seed = a handful of liquid large-caps for the end-to-end smoke run; expand freely.
+# The liquidity gate (config: liquidity) still filters at scan time, so illiquid
+# additions are skipped-with-reason rather than producing meaningless volume analysis.
+# NOTE: SPY is always fetched as the RS reference — no need to list it here.
+
+AAPL
+MSFT
+NVDA
+AMZN
+GOOGL
+META
+TSLA
+JPM
+XOM
+WMT
