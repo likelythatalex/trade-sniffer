@@ -167,11 +167,11 @@ version. Think of it as a README for the *domain*, not the code.
 ### Liquidity Filter
 - **Plain meaning:** Volume-based signals are only trustworthy on liquid names; thin stocks
   produce noise and aren't tradeable at size.
-- **How it's implemented here:** 20-day average dollar-volume + min-price gate at scan time;
-  illiquid names skipped with a logged reason. This is a universe-eligibility filter, so an
-  **absolute** floor is the correct tool here (the relative-threshold rule governs *signal*
-  thresholds, not universe gating).
-- **Status:** `PLANNED` (`universe.py`).
+- **How it's implemented here:** 20-day average dollar-volume + min-price gate
+  (`universe.passes_liquidity_gate`); illiquid names skipped with a logged reason. This is a
+  universe-eligibility filter, so an **absolute** floor is the correct tool here (the
+  relative-threshold rule governs *signal* thresholds, not universe gating). SPY is exempt.
+- **Status:** `IMPLEMENTED` (`universe.py`, tested in `tests/test_universe.py`).
 
 ### Conviction Score / Confirmation Stacking
 - **Plain meaning:** Rather than a yes/no call, rank candidates 0–100; independent signals
