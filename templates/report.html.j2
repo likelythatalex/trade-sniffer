@@ -26,10 +26,16 @@
     .direction.accumulation { background: #1b5e2099; }
     .direction.distribution { background: #7f1d1d99; }
     .score { margin-left: auto; font-size: 1.2rem; font-weight: 700; }
+    .expand { cursor: pointer; background: #8883; color: inherit; border: 1px solid #8884;
+              border-radius: 4px; font-size: .9rem; line-height: 1; padding: .2rem .45rem; }
     .subscores { font-size: .8rem; opacity: .8; margin: .5rem 0; }
     .subscores span { margin-right: .8rem; }
     .reasons { margin: .5rem 0; padding-left: 1.1rem; font-size: .9rem; }
-    .chart { height: 360px; margin-top: .75rem; }
+    /* Drag the bottom edge to resize; the autosize widget fills the box. */
+    .chart { height: 360px; min-height: 160px; margin-top: .75rem; resize: vertical;
+             overflow: hidden; border: 1px solid #8883; border-radius: 4px; }
+    .chart.fullscreen { position: fixed; inset: 0; height: 100vh !important; width: 100vw;
+                        margin: 0; z-index: 1000; border-radius: 0; resize: none; }
     footer { margin-top: 2rem; font-size: .85rem; opacity: .7; }
   </style>
 </head>
@@ -52,6 +58,7 @@
       <span class="symbol">{{ c.symbol }}</span>
       <span class="direction {{ c.direction }}">{{ c.direction }}</span>
       <span class="score">{{ '%.0f' | format(c.score) }}/100</span>
+      <button class="expand" type="button" title="Expand / collapse chart (Esc to exit)">⤢</button>
     </div>
     <div class="subscores">
       {% for name, value in c.sub_scores.items() %}<span>{{ name }}: {{ '%+.0f' | format(value) }}</span>{% endfor %}
@@ -94,12 +101,24 @@
         script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
         script.innerHTML = JSON.stringify({
           symbol: host.dataset.symbol, interval: INTERVAL, theme: THEME,
-          width: "100%", height: 360, style: "1", locale: "en", allow_symbol_change: false
+          autosize: true, style: "1", locale: "en", allow_symbol_change: false
         });
         host.appendChild(script);
       }
     }, { rootMargin: "200px" });
     document.querySelectorAll(".chart").forEach((el) => observer.observe(el));
+
+    // Per-card chart: expand to fill the screen (and back); Esc exits.
+    document.querySelectorAll(".expand").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        btn.closest(".card").querySelector(".chart").classList.toggle("fullscreen");
+      });
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        document.querySelectorAll(".chart.fullscreen").forEach((c) => c.classList.remove("fullscreen"));
+      }
+    });
   </script>
 </body>
 </html>

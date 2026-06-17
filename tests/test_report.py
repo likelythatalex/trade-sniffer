@@ -94,6 +94,9 @@ def test_render_dashboard_writes_files_with_required_content(tmp_path: Path) -> 
     assert "embed-widget-advanced-chart.js" in html  # the TV widget
     assert "TradingView" in html  # attribution kept visible
     assert "Accumulation" in html and "Distribution" in html
+    # Resizable / expandable chart controls.
+    assert "autosize" in html  # widget fills its container (so resize/fullscreen work)
+    assert "class=\"expand\"" in html and "fullscreen" in html
 
 
 def test_render_dashboard_ranks_within_direction(tmp_path: Path) -> None:
