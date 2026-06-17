@@ -1,0 +1,11 @@
+run_ts,ticker,timeframe,direction,composite_score,wyckoff_score,range_score,volume_score,spring_score,confirmation_score,rs_vs_spy,vol_contraction,mtf_agree,trend_context,data_quality_flag,feat_volume_ratio,feat_volume_pctile,feat_spread_atr,feat_spread_pctile,feat_close_position,made_watchlist,transition
+2026-06-17T11:29:28+00:00,AAPL,daily,none,0.0,0.0,0.0,0.0,0.0,0.0,,,n/a,0.0,,0.8706,20.0,0.9716,60.0,0.8095,False,none
+2026-06-17T11:29:28+00:00,MSFT,daily,none,0.0,0.0,0.0,0.0,0.0,0.0,,,n/a,0.0,,0.9655,36.0,0.5047,8.0,0.5106,False,none
+2026-06-17T11:29:28+00:00,NVDA,daily,none,0.0,0.0,0.0,0.0,0.0,0.0,,,n/a,0.0,,0.7478,8.0,0.5077,8.0,0.0286,False,none
+2026-06-17T11:29:28+00:00,AMZN,daily,none,0.0,0.0,0.0,0.0,0.0,0.0,,,n/a,0.0,,0.8768,24.0,0.563,16.0,0.1355,False,none
+2026-06-17T11:29:28+00:00,GOOGL,daily,none,0.0,0.0,0.0,0.0,0.0,0.0,,,n/a,0.0,,0.8885,28.0,0.8483,56.0,0.6924,False,none
+2026-06-17T11:29:28+00:00,META,daily,none,0.0,0.0,0.0,0.0,0.0,0.0,,,n/a,0.0,,0.6746,8.0,0.7702,52.0,0.5945,False,none
+2026-06-17T11:29:28+00:00,TSLA,daily,none,0.0,0.0,0.0,0.0,0.0,0.0,,,n/a,0.0,,0.8792,16.0,0.6982,40.0,0.3468,False,none
+2026-06-17T11:29:28+00:00,JPM,daily,distribution,40.25,40.25,-96.41,0.0,0.0,-80.74,,,n/a,-80.74,,1.3744,88.0,1.1798,84.0,0.9211,False,none
+2026-06-17T11:29:28+00:00,XOM,daily,accumulation,47.19,47.19,66.55,0.0,100.0,52.76,,,n/a,52.76,,1.1407,80.0,0.5245,16.0,0.8664,False,none
+2026-06-17T11:29:28+00:00,WMT,daily,none,1.88,1.88,0.0,0.0,0.0,-9.41,,,n/a,-9.41,,1.0078,56.0,0.9684,60.0,0.3758,False,none
