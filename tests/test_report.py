@@ -97,6 +97,7 @@ def test_render_dashboard_writes_files_with_required_content(tmp_path: Path) -> 
     # Resizable / expandable chart controls.
     assert "autosize" in html  # widget fills its container (so resize/fullscreen work)
     assert "class=\"expand\"" in html and "fullscreen" in html
+    assert "chart-close" in html  # visible exit control in fullscreen
 
 
 def test_render_dashboard_ranks_within_direction(tmp_path: Path) -> None:

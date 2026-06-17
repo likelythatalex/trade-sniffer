@@ -36,6 +36,10 @@
              overflow: hidden; border: 1px solid #8883; border-radius: 4px; }
     .chart.fullscreen { position: fixed; inset: 0; height: 100vh !important; width: 100vw;
                         margin: 0; z-index: 1000; border-radius: 0; resize: none; }
+    .chart-close { display: none; }
+    .chart.fullscreen .chart-close { display: inline-block; position: fixed; top: 12px;
+        right: 16px; z-index: 1001; background: #000a; color: #fff; border: 1px solid #fff6;
+        border-radius: 6px; padding: .35rem .7rem; cursor: pointer; font-size: .9rem; }
     footer { margin-top: 2rem; font-size: .85rem; opacity: .7; }
   </style>
 </head>
@@ -64,7 +68,9 @@
       {% for name, value in c.sub_scores.items() %}<span>{{ name }}: {{ '%+.0f' | format(value) }}</span>{% endfor %}
     </div>
     {% if c.reasons %}<ul class="reasons">{% for r in c.reasons %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
-    <div class="chart" data-symbol="{{ c.symbol }}"></div>
+    <div class="chart" data-symbol="{{ c.symbol }}">
+      <button class="chart-close" type="button" title="Exit fullscreen (Esc)">✕ Close</button>
+    </div>
   </article>
   {% endmacro %}
 
@@ -108,10 +114,16 @@
     }, { rootMargin: "200px" });
     document.querySelectorAll(".chart").forEach((el) => observer.observe(el));
 
-    // Per-card chart: expand to fill the screen (and back); Esc exits.
+    // Per-card chart: expand to fill the screen, then exit via the ✕ button or Esc.
     document.querySelectorAll(".expand").forEach((btn) => {
       btn.addEventListener("click", () => {
         btn.closest(".card").querySelector(".chart").classList.toggle("fullscreen");
+      });
+    });
+    document.querySelectorAll(".chart-close").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        btn.closest(".chart").classList.remove("fullscreen");
       });
     });
     document.addEventListener("keydown", (e) => {
