@@ -612,7 +612,24 @@ holds the prior run's qualifying set per timeframe):
   rally/reaction levels (methodology §2.3/§3); deferred because it adds a detection step and
   needs validation. In v1, climax only informs *scoring within* the range (§6.4 mapping),
   not the boundary.
-- Chart annotations on the embedded charts (range lines, spring marker).
+- **Annotated interactive charts via TradingView Lightweight Charts™.** The free TV *embed
+  widget* (v1) is display-only — it cannot take programmatic drawings or custom indicators,
+  so critical points can't be highlighted on it. The path to annotations (range high/low
+  lines, spring/upthrust markers, score labels) is to render charts ourselves with
+  TradingView's open-source **Lightweight Charts** JS library, fed by the OHLCV we already
+  fetch. Trade-off: we lose TV's full drawing toolset but gain full annotation control while
+  staying interactive and single-file. This would supersede the v1 embed widget for the
+  dashboard. (Pine Script is not injectable into an embed; it's a separate, manual path.)
+  Complementary to — not a replacement for — the Discord static chart preview below:
+  Lightweight Charts is the *interactive dashboard* surface, the PNG snapshot is the
+  *glanceable notification* image. Both remain in scope.
+- **Crypto mode (e.g. `BTC-USD`, `ETH-USD`).** Wyckoff/VSA applies to crypto and yfinance
+  serves it, but it needs a separate profile rather than a drop-in: 24/7 trading (no market
+  calendar / post-close scheduling assumption), a crypto RS benchmark instead of SPY,
+  liquidity gating in crypto terms (not the $-volume / $5-price floor), crypto TV symbol
+  prefixes (`BINANCE:` / `COINBASE:`), and no corporate actions. Belongs to the **same future
+  phase as the multi-strategy expansion (§6/§7)**: strategies are applied per asset class
+  *where applicable*, selected via the registry + config.
 - **Discord static chart preview (v1.1 nicety)**: render a PNG snapshot per top ticker
   (headless chart render) and attach it to the notification, so the channel shows a
   glanceable preview before clicking through to the interactive dashboard. Discord cannot
