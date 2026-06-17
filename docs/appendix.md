@@ -260,9 +260,13 @@ version. Think of it as a README for the *domain*, not the code.
 
 ### Notification Surface
 - **Plain meaning:** Where you get pinged about new setups.
-- **How it's implemented here:** Discord webhook (v1) with top tickers + link to the report.
-  Telegram and in-channel static chart previews are future options.
-- **Status:** `PLANNED` (Discord); `FUTURE` (Telegram, chart-image previews).
+- **How it's implemented here:** `notify.DiscordNotifier` posts a webhook message (NEW/FAILED
+  counts, top NEW tickers + report link; condensed on cold start) behind a pluggable
+  `Notifier` interface (`make_notifier`); sending is best-effort (failures logged, never
+  raised). Telegram and in-channel static chart previews are future options.
+- **Status:** `IMPLEMENTED` (Discord — `notify.py`, tested in `tests/test_notify.py`);
+  scanner wiring (build summary + suppress_empty) is the next M4 step. `FUTURE` (Telegram,
+  chart-image previews).
 
 ---
 
