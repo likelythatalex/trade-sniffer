@@ -9,3 +9,4 @@ requests==2.34.2        # Discord webhook
 
 # Dev / test
 pytest==9.1.0
+lxml==6.1.1             # only for scripts/build_universe.py (Wikipedia table parsing)
