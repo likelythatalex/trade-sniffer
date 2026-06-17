@@ -9,7 +9,6 @@ of sync when params are tuned during calibration.
 """
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -297,11 +296,10 @@ def _validate(config: Config) -> None:
             f"notify.channel must be 'discord' in v1 (got '{config.output.notify.channel}')."
         )
 
-    # A referenced env var that is *set but empty* is a mistake; unset is fine (the
-    # value arrives at runtime via secrets).
-    for env_name in (config.output.notify.webhook_url_env, config.output.notify.report_base_url_env):
-        if env_name and env_name in os.environ and os.environ[env_name].strip() == "":
-            raise ConfigError(f"Env var '{env_name}' is referenced but set but empty.")
+    # NOTE: we intentionally do NOT fail on a referenced env var being set-but-empty.
+    # GitHub Actions turns an *unset* secret (e.g. an optional REPORT_BASE_URL) into an
+    # empty env var, and the runtime already degrades gracefully (notify is skipped when
+    # the webhook is empty; the report link is omitted when the base URL is empty).
 
     # Wyckoff sub-score weights must sum to 100 (they form a 0-100 composite).
     total = sum(config.wyckoff.sub_weights.values())

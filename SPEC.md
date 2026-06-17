@@ -254,9 +254,12 @@ output:
 - Loads `config.yaml` into typed dataclasses (no raw dict access downstream).
 - Validates on load and **fails fast** (clear error, non-zero exit) before any fetch when:
   required keys are missing, `weekly` is in `timeframes` without `per_timeframe.weekly`
-  present, `notify.channel` is anything other than `discord` in v1, a referenced env var
-  name is set but empty, `sub_weights` do not sum to 100, or a timeframe's configured
-  lookback is smaller than its scoring window + `features.baseline_window` (N5 warmup).
+  present, `notify.channel` is anything other than `discord` in v1, `sub_weights` do not sum
+  to 100, or a timeframe's configured lookback is smaller than its scoring window +
+  `features.baseline_window` (N5 warmup).
+- A referenced env var being **set-but-empty is NOT an error**: GitHub Actions turns an unset
+  (optional) secret into an empty env var, and the runtime degrades gracefully (notify is
+  skipped when the webhook is empty; the report link is omitted when the base URL is empty).
 - Exposes a helper that returns the **resolved** Wyckoff params for a given timeframe
   (`defaults` merged with `per_timeframe[tf]`), so strategy code never merges config itself.
 

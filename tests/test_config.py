@@ -118,12 +118,13 @@ def test_sub_weights_must_sum_to_100(raw_config: dict, tmp_path: Path) -> None:
         config.load_config(write_config(tmp_path, raw_config))
 
 
-def test_empty_referenced_env_var_rejected(
+def test_empty_referenced_env_var_is_allowed(
     raw_config: dict, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("NOTIFY_WEBHOOK_URL", "")  # set but empty -> mistake
-    with pytest.raises(ConfigError, match="set but empty"):
-        config.load_config(write_config(tmp_path, raw_config))
+    # GitHub Actions turns an unset secret into an empty env var; that must NOT fail
+    # validation (the runtime degrades gracefully — notify skipped, report link omitted).
+    monkeypatch.setenv("REPORT_BASE_URL", "")
+    config.load_config(write_config(tmp_path, raw_config))  # no raise
 
 
 def test_unset_env_var_is_allowed(
