@@ -231,9 +231,11 @@ version. Think of it as a README for the *domain*, not the code.
 ### Resampling vs. Native Timeframe
 - **Plain meaning:** Weekly bars can be aggregated from daily or fetched directly; the choice
   affects history depth and accuracy.
-- **How it's implemented here:** Weekly fetched natively (`interval='1wk'`) to avoid
-  resampling artifacts and history-depth math problems.
-- **Status:** `PLANNED`.
+- **How it's implemented here:** Weekly fetched natively (`interval='1wk'`, `auto_adjust=True`)
+  in `data.fetch_ohlcv` to avoid resampling artifacts and history-depth math problems; fetch
+  window covers `required_history`; results cached per ticker+timeframe+date.
+- **Status:** `IMPLEMENTED` (`data.py`, pure helpers tested in `tests/test_data.py`; live
+  fetch verified manually). SPY is always fetched (gate-exempt).
 
 ### State / Dedup
 - **Plain meaning:** Re-alerting the same still-valid setup every run is noise; new and

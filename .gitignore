@@ -26,6 +26,7 @@ env/
 output/report_*.html
 output/latest*.html
 output/watchlist_*.txt
+.cache/
 data_cache/
 *.cache
 
