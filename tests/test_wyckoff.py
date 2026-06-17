@@ -184,6 +184,23 @@ def test_accumulation_outscores_trend() -> None:
     assert accum.score > trend.score
 
 
+def test_no_lookahead_evaluation_unaffected_by_future_bars() -> None:
+    # SPEC §13: evaluating as-of a bar must not depend on bars that come after it.
+    df = accumulation_df()
+    params = make_params()
+    as_of = WyckoffStrategy().evaluate(df, context_for(df, params))
+
+    # Append arbitrary future bars, then re-evaluate the same prefix; result must match.
+    future = df.tail(2).copy()
+    extended = pd.concat([df, future], ignore_index=True)
+    prefix = extended.iloc[: len(df)]
+    recomputed = WyckoffStrategy().evaluate(prefix, context_for(prefix, params))
+
+    assert recomputed.direction == as_of.direction
+    assert recomputed.score == pytest.approx(as_of.score)
+    assert recomputed.sub_scores == as_of.sub_scores
+
+
 def test_nan_features_yield_finite_score() -> None:
     df = accumulation_df()
     df.loc[df.index[-5:], "volume"] = 0.0  # zero-volume window -> volume_ratio NaN at the end

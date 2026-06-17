@@ -1,10 +1,11 @@
+# Pinned for reproducibility (local venv == CI). Bump deliberately, then re-test.
 # Runtime
-yfinance>=0.2.40        # market data (daily + native weekly)
-pandas>=2.2             # OHLCV frames + rolling features
-numpy>=1.26             # numerics under pandas
-PyYAML>=6.0             # config.yaml
-Jinja2>=3.1             # HTML dashboard template
-requests>=2.32          # Discord webhook
+yfinance==1.4.1         # market data (daily + native weekly)
+pandas==3.0.3           # OHLCV frames + rolling features
+numpy==2.4.6            # numerics under pandas
+PyYAML==6.0.3           # config.yaml
+Jinja2==3.1.6           # HTML dashboard template
+requests==2.34.2        # Discord webhook
 
 # Dev / test
-pytest>=8.0
+pytest==9.1.0
