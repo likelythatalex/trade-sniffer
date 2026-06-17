@@ -52,7 +52,9 @@ class WyckoffStrategy(Strategy):
 
         volume_score, volume_reasons = score_volume_behavior(df, features, range_info, params)
         spring = detect_spring_upthrust(df, features, range_info, params)
-        confirmation_score, confirmation_reasons = score_confirmation(df, features, range_info, params)
+        confirmation_score, confirmation_reasons = score_confirmation(
+            df, features, range_info, params, context.prior_state
+        )
 
         sub_scores = {
             "range_structure": _range_structure_score(range_info, params),
@@ -254,30 +256,44 @@ def detect_spring_upthrust(
 
 
 def score_confirmation(
-    df: pd.DataFrame, features: pd.DataFrame, range_info: dict[str, Any], params: dict[str, Any]
+    df: pd.DataFrame,
+    features: pd.DataFrame,
+    range_info: dict[str, Any],
+    params: dict[str, Any],
+    mtf_direction: str | None = None,
 ) -> tuple[float, list[str]]:
-    """§7 confirmation. v1/M1 implements TREND CONTEXT only (signed). RS-vs-SPY and
-    MTF agreement need data.py (SPY) and state.py respectively, and volatility
-    contraction is non-directional — all abstain here for now (partial by design)."""
-    n = len(df)
-    if n < 2:
-        return 0.0, []
-    lookback = min(int(params["trend_lookback"]), n - 1)
-    prior_close = float(df["close"].iloc[-1 - lookback])
-    last_close = float(df["close"].iloc[-1])
-    if prior_close <= 0:
-        return 0.0, []
-
-    pct_change = (last_close - prior_close) / prior_close
-    # Prior downtrend (pct_change < 0) favors accumulation -> positive.
-    signed = _clip(-pct_change / TREND_FULL_SCALE, -1.0, 1.0) * 100.0
-
+    """§7 confirmation (signed; mean of the firing inputs). Implements TREND CONTEXT
+    and MTF agreement (``mtf_direction`` = the other timeframe's stored direction, or
+    None = neutral/n-a). RS-vs-SPY and volatility contraction still abstain (need
+    data.py SPY / not yet wired) — partial by design."""
+    contributions: list[float] = []
     reasons: list[str] = []
-    if signed >= DIRECTION_FLOOR:
-        reasons.append("prior downtrend (accumulation context)")
-    elif signed <= -DIRECTION_FLOOR:
-        reasons.append("prior uptrend (distribution context)")
-    return signed, reasons
+
+    n = len(df)
+    if n >= 2:
+        lookback = min(int(params["trend_lookback"]), n - 1)
+        prior_close = float(df["close"].iloc[-1 - lookback])
+        last_close = float(df["close"].iloc[-1])
+        if prior_close > 0:
+            pct_change = (last_close - prior_close) / prior_close
+            # Prior downtrend (pct_change < 0) favors accumulation -> positive.
+            trend = _clip(-pct_change / TREND_FULL_SCALE, -1.0, 1.0) * 100.0
+            contributions.append(trend)
+            if trend >= DIRECTION_FLOOR:
+                reasons.append("prior downtrend (accumulation context)")
+            elif trend <= -DIRECTION_FLOOR:
+                reasons.append("prior uptrend (distribution context)")
+
+    # MTF agreement: the other timeframe's stored direction is directional evidence now.
+    if mtf_direction == "accumulation":
+        contributions.append(100.0)
+        reasons.append("MTF: other timeframe in accumulation")
+    elif mtf_direction == "distribution":
+        contributions.append(-100.0)
+        reasons.append("MTF: other timeframe in distribution")
+
+    score = sum(contributions) / len(contributions) if contributions else 0.0
+    return score, reasons
 
 
 # --- small helpers ---

@@ -122,6 +122,32 @@ def test_no_liquidity_gate_keeps_thin_names(tmp_path: Path, monkeypatch: pytest.
     assert ungated["skipped"] == 0  # evaluated despite thin volume
 
 
+class _StubStrategy:
+    name = "wyckoff"
+
+    def evaluate(self, df, context):
+        return StrategyResult("accumulation", 80.0, {"volume_behavior": 80.0}, ["stub"])
+
+
+def test_dedup_transitions_and_state_across_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = config_for(tmp_path)  # liquidity floor removed; threshold 70 (stub scores 80 -> flags)
+    fetch_result = FetchResult(df=accumulation_df(), exchange="NYSE", corporate_actions=pd.Series(dtype=float))
+    monkeypatch.setattr(scanner, "load_universe", lambda _p: ["XOM"])
+    monkeypatch.setattr(scanner, "fetch_ohlcv", lambda t, tf, c, today=None: fetch_result)
+    monkeypatch.setattr(scanner, "get_strategy", lambda name: _StubStrategy())
+
+    signals = Path(cfg.output.dir) / "signals.csv"
+
+    # First run: XOM newly qualifies -> transition "new"; state persisted.
+    scanner.run_timeframe("daily", cfg, today=date(2024, 6, 1))
+    assert (Path(cfg.output.dir) / "state.json").exists()
+    assert signals.read_text(encoding="utf-8").strip().splitlines()[-1].endswith("new")
+
+    # Second run: still qualifying -> "continuing" (not re-notified as new).
+    scanner.run_timeframe("daily", cfg, today=date(2024, 6, 2))
+    assert signals.read_text(encoding="utf-8").strip().splitlines()[-1].endswith("continuing")
+
+
 def _empty_quality():
     from src.data_quality import QualityReport
 

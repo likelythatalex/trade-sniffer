@@ -160,9 +160,11 @@ version. Think of it as a README for the *domain*, not the code.
 
 ### Multi-Timeframe (MTF) Agreement
 - **Plain meaning:** A setup confirmed on two timeframes is more reliable than on one.
-- **How it's implemented here:** The running TF reads the *stored* most-recent result of the
-  other TF (no recompute) and applies a conviction bonus. Cold-start default = neutral.
-- **Status:** `PLANNED` (`state.py`).
+- **How it's implemented here:** `scanner` reads the other TF's *stored* direction
+  (`state.mtf_direction`, no recompute) and passes it into the strategy; Wyckoff
+  `score_confirmation` treats it as directional evidence in the `confirmation` sub-score.
+  Cold start / not-qualifying-there = neutral (logged `mtf_agree=n/a`).
+- **Status:** `IMPLEMENTED` (`state.py` + `scanner.py` + `strategies/wyckoff.py`).
 
 ### Liquidity Filter
 - **Plain meaning:** Volume-based signals are only trustworthy on liquid names; thin stocks
@@ -244,8 +246,8 @@ version. Think of it as a README for the *domain*, not the code.
   current qualifiers to new/continuing/failed; `load_state`/`save_state` persist per-timeframe
   qualifiers (ticker -> score+direction) as JSON; `mtf_direction` reads the other timeframe's
   stored direction for the cross-read. Notifications will fire only on new + failed.
-- **Status:** `IMPLEMENTED` (`state.py`, tested in `tests/test_state.py`); scanner wiring
-  (dedup notify + MTF bonus) is the next M4 step.
+- **Status:** `IMPLEMENTED` (`state.py` + `scanner.py`, tested in `tests/test_state.py` and
+  `tests/test_scanner.py`): dedup transitions stamped on signals.csv, MTF cross-read wired.
 
 ### Embedded Charts / Dashboard
 - **Plain meaning:** Find and inspect candidates in one place rather than exporting to
@@ -264,9 +266,9 @@ version. Think of it as a README for the *domain*, not the code.
   counts, top NEW tickers + report link; condensed on cold start) behind a pluggable
   `Notifier` interface (`make_notifier`); sending is best-effort (failures logged, never
   raised). Telegram and in-channel static chart previews are future options.
-- **Status:** `IMPLEMENTED` (Discord — `notify.py`, tested in `tests/test_notify.py`);
-  scanner wiring (build summary + suppress_empty) is the next M4 step. `FUTURE` (Telegram,
-  chart-image previews).
+- **Status:** `IMPLEMENTED` (Discord — `notify.py` + `scanner.py`, tested in
+  `tests/test_notify.py`): scanner builds the NEW/FAILED summary, suppresses empty runs, and
+  fires the webhook (cold start = condensed). `FUTURE` (Telegram, chart-image previews).
 
 ---
 

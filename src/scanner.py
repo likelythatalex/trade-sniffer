@@ -5,9 +5,10 @@ The entry point. Wires the fixed pipeline together —
 writes the report / TV import file / signals.csv. Holds the fail-soft boundary: one
 bad ticker is logged and skipped, never aborts the run.
 
-M3 scope: state.py (dedup/MTF) and notify.py (Discord) are deferred to M4, so
-``transition`` is "none", ``mtf_agree`` is "n/a", and no notification is sent. SPY
-is not fetched yet because RS confirmation still abstains.
+State + notifications are wired (M4): prior-run state drives dedup transitions and
+the MTF cross-read (the other timeframe's stored direction nudges confirmation), and
+Discord fires on NEW/FAILED only (suppressed when empty). Still abstaining: RS-vs-SPY
+and volatility-contraction confirmation inputs (SPY not fetched yet).
 
 Run from the repo root::
 
@@ -19,6 +20,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import logging
+import os
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -30,10 +32,14 @@ from .config import Config, load_config, resolve_wyckoff_params
 from .data import DataError, fetch_ohlcv
 from .data_quality import QualityReport, clean
 from .features import compute_features
+from .notify import has_transitions, make_notifier
 from .report import SIGNALS_COLUMNS, append_signals, render_dashboard, write_tv_import_file
+from .state import TimeframeState, classify_transitions, load_state, mtf_direction, save_state
 from .strategies.base import StrategyContext, StrategyResult
 from .strategies.registry import get_strategy
 from .universe import load_universe, passes_liquidity_gate
+
+_OTHER_TIMEFRAME = {"daily": "weekly", "weekly": "daily"}
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +68,18 @@ def run_timeframe(
     params = resolve_wyckoff_params(config, timeframe)
     run_ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
+    # Prior state: dedup baseline for THIS timeframe + the OTHER timeframe's MTF read.
+    state_path = Path(config.output.dir) / "state.json"
+    state = load_state(state_path)
+    other_timeframe = _OTHER_TIMEFRAME[timeframe]
+    prior_tf_state = state.get(timeframe)
+    prior_qualifying = set(prior_tf_state.qualifying) if prior_tf_state else set()
+    cold_start = prior_tf_state is None
+
     counts = {"scanned": 0, "flagged": 0, "skipped": 0, "errored": 0}
     cards: list[dict[str, Any]] = []
     signal_rows: list[dict[str, Any]] = []
+    current_qualifying: dict[str, dict[str, Any]] = {}
 
     for ticker in universe:
         counts["scanned"] += 1
@@ -85,16 +100,22 @@ def run_timeframe(
                 continue
 
             features = compute_features(cleaned, baseline_window)
-            context = StrategyContext(features=features, params=params, timeframe=timeframe)
+            other_direction = mtf_direction(state, other_timeframe, ticker)  # None on cold start
+            context = StrategyContext(
+                features=features, params=params, timeframe=timeframe,
+                prior_state=other_direction, config=config,
+            )
             results = {name: strat.evaluate(cleaned, context) for name, strat in strategies.items()}
             composite = combine(results, weights)
 
             made_watchlist = composite.score >= config.scoring.watchlist_threshold
             signal_rows.append(
-                _signals_row(run_ts, ticker, timeframe, composite, results.get("wyckoff"), features, quality, made_watchlist)
+                _signals_row(run_ts, ticker, timeframe, composite, results.get("wyckoff"),
+                             features, quality, made_watchlist, other_direction)
             )
             if made_watchlist and composite.direction != "none":
                 counts["flagged"] += 1
+                current_qualifying[ticker] = {"score": round(composite.score, 2), "direction": composite.direction}
                 cards.append(_card(ticker, fetched.exchange, composite))
 
         except DataError as exc:
@@ -104,10 +125,19 @@ def run_timeframe(
             counts["errored"] += 1
             logger.exception("error evaluating %s", ticker)
 
+    # Dedup transitions vs the prior run of THIS timeframe, then stamp each logged row.
+    transitions = classify_transitions(prior_qualifying, set(current_qualifying))
+    for row in signal_rows:
+        row["transition"] = transitions.get(row["ticker"], "none")
+
     render_dashboard(cards, timeframe, config, today=today, summary=counts)
     if config.output.write_tv_import_file:
         write_tv_import_file(cards, timeframe, config)
     append_signals(signal_rows, Path(config.output.dir) / "signals.csv")
+
+    _notify(config, timeframe, transitions, current_qualifying, cold_start, today or date.today())
+    state[timeframe] = TimeframeState(qualifying=current_qualifying, run_ts=run_ts)
+    save_state(state_path, state)
     return counts
 
 
@@ -150,6 +180,47 @@ def _card(ticker: str, exchange: str | None, composite: StrategyResult) -> dict[
     }
 
 
+def _notify(
+    config: Config,
+    timeframe: str,
+    transitions: dict[str, str],
+    current_qualifying: dict[str, dict[str, Any]],
+    cold_start: bool,
+    today: date,
+) -> None:
+    """Build the run summary and push it (NEW/FAILED only; suppressed when empty)."""
+    notify_cfg = config.output.notify
+    if not notify_cfg.enabled:
+        return
+
+    new_items = [
+        {"ticker": t, "direction": current_qualifying[t]["direction"], "score": current_qualifying[t]["score"]}
+        for t, transition in transitions.items()
+        if transition == "new"
+    ]
+    failed = [t for t, transition in transitions.items() if transition == "failed"]
+    summary = {
+        "timeframe": timeframe,
+        "new": new_items,
+        "failed": failed,
+        "cold_start": cold_start,
+        "report_url": _report_url(notify_cfg, timeframe, today),
+    }
+
+    if notify_cfg.suppress_empty and not cold_start and not has_transitions(summary):
+        return
+    webhook = os.environ.get(notify_cfg.webhook_url_env)
+    if not webhook:
+        logger.info("notify skipped: %s not set", notify_cfg.webhook_url_env)
+        return
+    make_notifier(notify_cfg.channel, webhook).send(summary)
+
+
+def _report_url(notify_cfg: Any, timeframe: str, today: date) -> str | None:
+    base = os.environ.get(notify_cfg.report_base_url_env)
+    return f"{base.rstrip('/')}/report_{timeframe}_{today.isoformat()}.html" if base else None
+
+
 def _signals_row(
     run_ts: str,
     ticker: str,
@@ -159,8 +230,12 @@ def _signals_row(
     features: pd.DataFrame,
     quality: QualityReport,
     made_watchlist: bool,
+    mtf_direction: str | None = None,
 ) -> dict[str, Any]:
-    """Build one signals.csv row (schema ``SIGNALS_COLUMNS``) for an evaluated ticker."""
+    """Build one signals.csv row (schema ``SIGNALS_COLUMNS``) for an evaluated ticker.
+
+    ``transition`` is set to "none" here and patched after classification.
+    """
     last = features.iloc[-1] if len(features) else None
     sub = wyckoff.sub_scores if wyckoff else {}
     return {
@@ -175,9 +250,9 @@ def _signals_row(
         "spring_score": _round(sub.get("spring_upthrust")),
         "confirmation_score": _round(sub.get("confirmation")),
         "rs_vs_spy": "",  # abstains until data.py SPY + RS scoring land
-        "vol_contraction": "",  # abstains (M4)
-        "mtf_agree": "n/a",  # no state.py cross-read yet (M4)
-        "trend_context": _round(sub.get("confirmation")),  # confirmation = trend-only at M1
+        "vol_contraction": "",  # abstains
+        "mtf_agree": _mtf_agree(mtf_direction, composite.direction),
+        "trend_context": _round(sub.get("confirmation")),  # confirmation = trend + MTF
         "data_quality_flag": "; ".join(quality.repairs),
         "feat_volume_ratio": _feat(last, "volume_ratio"),
         "feat_volume_pctile": _feat(last, "volume_pctile"),
@@ -198,6 +273,13 @@ def _feat(row: pd.Series | None, column: str) -> float | str:
         return ""
     value = row.get(column)
     return "" if value is None or pd.isna(value) else round(float(value), 4)
+
+
+def _mtf_agree(mtf_direction: str | None, direction: str) -> str:
+    """Log-friendly MTF agreement: n/a (no other-TF read), agree, or disagree."""
+    if mtf_direction is None:
+        return "n/a"
+    return "agree" if mtf_direction == direction else "disagree"
 
 
 if __name__ == "__main__":
