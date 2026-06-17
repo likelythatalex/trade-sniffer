@@ -240,9 +240,12 @@ version. Think of it as a README for the *domain*, not the code.
 ### State / Dedup
 - **Plain meaning:** Re-alerting the same still-valid setup every run is noise; new and
   newly-failed setups are what's actionable.
-- **How it's implemented here:** Prior-run state classifies each ticker
-  new/continuing/failed; notifications fire only on new + failed transitions.
-- **Status:** `PLANNED` (`state.py`).
+- **How it's implemented here:** `state.classify_transitions` (pure) maps prior vs.
+  current qualifiers to new/continuing/failed; `load_state`/`save_state` persist per-timeframe
+  qualifiers (ticker -> score+direction) as JSON; `mtf_direction` reads the other timeframe's
+  stored direction for the cross-read. Notifications will fire only on new + failed.
+- **Status:** `IMPLEMENTED` (`state.py`, tested in `tests/test_state.py`); scanner wiring
+  (dedup notify + MTF bonus) is the next M4 step.
 
 ### Embedded Charts / Dashboard
 - **Plain meaning:** Find and inspect candidates in one place rather than exporting to
