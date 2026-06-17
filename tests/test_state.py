@@ -41,6 +41,17 @@ def test_load_missing_state_is_cold_start(tmp_path: Path) -> None:
     assert load_state(tmp_path / "nope.json") == {}
 
 
+def test_load_empty_or_corrupt_state_is_cold_start(tmp_path: Path) -> None:
+    # A failed restore can leave an empty file; that must degrade to cold start, not crash.
+    empty = tmp_path / "empty.json"
+    empty.write_text("", encoding="utf-8")
+    assert load_state(empty) == {}
+
+    garbage = tmp_path / "garbage.json"
+    garbage.write_text("not json", encoding="utf-8")
+    assert load_state(garbage) == {}
+
+
 def test_mtf_direction_reads_other_timeframe() -> None:
     state = {
         "weekly": TimeframeState(

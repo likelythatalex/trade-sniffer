@@ -51,8 +51,10 @@ jobs:
           mkdir -p output
           git fetch origin gh-pages --depth=1 || true
           # signals.csv accumulates; state.json drives dedup/MTF — carry them forward.
-          git show origin/gh-pages:signals.csv > output/signals.csv 2>/dev/null || true
-          git show origin/gh-pages:state.json  > output/state.json  2>/dev/null || true
+          # rm on failure so a failed restore (e.g. first run, no gh-pages) doesn't leave
+          # an empty file that breaks loading.
+          git show origin/gh-pages:signals.csv > output/signals.csv 2>/dev/null || rm -f output/signals.csv
+          git show origin/gh-pages:state.json  > output/state.json  2>/dev/null || rm -f output/state.json
 
       - name: Run scanner
         env:

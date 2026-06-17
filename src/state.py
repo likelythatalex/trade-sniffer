@@ -53,11 +53,21 @@ def mtf_direction(state: dict[str, TimeframeState], other_timeframe: str, ticker
 
 
 def load_state(path: Path) -> dict[str, TimeframeState]:
-    """Load per-timeframe state (cold start -> empty dict)."""
+    """Load per-timeframe state (cold start -> empty dict).
+
+    An empty, missing, or corrupt state file degrades to cold start rather than
+    crashing the run — e.g. an empty file left by a failed restore on first run.
+    """
     path = Path(path)
     if not path.exists():
         return {}
-    data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+        data = json.loads(text) if text else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
     return {
         timeframe: TimeframeState(qualifying=entry.get("qualifying", {}), run_ts=entry.get("run_ts", ""))
         for timeframe, entry in data.items()
