@@ -247,9 +247,12 @@ version. Think of it as a README for the *domain*, not the code.
 ### Embedded Charts / Dashboard
 - **Plain meaning:** Find and inspect candidates in one place rather than exporting to
   another app.
-- **How it's implemented here:** Self-contained-single-file HTML report per timeframe with
-  free TradingView embed widgets (attribution kept); ranked by score.
-- **Status:** `PLANNED` (`report.py`).
+- **How it's implemented here:** `report.render_dashboard` renders a single-file HTML report
+  per timeframe (Jinja2 template) with **lazy-loaded** free TradingView embed widgets
+  (attribution kept), accumulation/distribution sections ranked by score; plus
+  `write_tv_import_file` (secondary `.txt`) and `append_signals` (schema-stable log).
+- **Status:** `IMPLEMENTED` (`report.py`, tested in `tests/test_report.py`); populated
+  end-to-end once `scanner.py` wires the pipeline (next).
 
 ### Notification Surface
 - **Plain meaning:** Where you get pinged about new setups.

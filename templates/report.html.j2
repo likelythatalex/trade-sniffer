@@ -1,27 +1,105 @@
 {# Wyckoff Scan dashboard — single file, no build step (SPEC §8.1).
-   STUB: layout/styling to be built in report.py's implementation pass.
-   Hard requirements to honor when fleshing this out:
-   - Accumulation (long) and Distribution (short) in separate, labeled sections.
-   - Ranked by composite score, descending, within each section.
-   - Per card: ticker + exchange-prefixed symbol, direction, composite score,
-     sub-score breakdown, plain-English reason tags, and an embedded TradingView
-     Advanced Chart widget (interval = output.embed_chart_interval[timeframe]).
-   - Lazy-load widgets (instantiate on scroll into view) so big reports stay snappy.
-   - Keep TradingView attribution VISIBLE (free-widget license requirement).
-   - References TradingView's hosted embed-widget-advanced-chart.js via <script>;
-     no API key. Needs network at view time for the widget only.
-   Context passed in (see report.render_dashboard): title, timeframe, generated_ts,
-   summary (counts), accumulation[], distribution[]. #}
+   Accumulation (long) and Distribution (short) in separate, ranked sections; each
+   card shows score + sub-score breakdown + reason tags + a lazy-loaded TradingView
+   Advanced Chart widget (interval follows the timeframe). TradingView attribution is
+   kept visible (free-widget license). Needs network at view time for the widget only. #}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ title }} — {{ timeframe }} — {{ generated_ts }}</title>
+  <style>
+    :root { color-scheme: {{ theme }}; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 1.5rem;
+           background: {{ '#0e1117' if theme == 'dark' else '#ffffff' }};
+           color: {{ '#e6e6e6' if theme == 'dark' else '#1a1a1a' }}; }
+    header h1 { margin: 0 0 .25rem; }
+    .summary { opacity: .7; font-size: .9rem; }
+    h2 { border-bottom: 1px solid #8884; padding-bottom: .3rem; margin-top: 2rem; }
+    .card { border: 1px solid #8884; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+    .card-head { display: flex; flex-wrap: wrap; gap: .75rem; align-items: baseline; }
+    .ticker { font-size: 1.3rem; font-weight: 700; }
+    .symbol { opacity: .6; font-size: .85rem; }
+    .direction { text-transform: uppercase; font-size: .7rem; padding: .15rem .4rem;
+                 border-radius: 4px; }
+    .direction.accumulation { background: #1b5e2099; }
+    .direction.distribution { background: #7f1d1d99; }
+    .score { margin-left: auto; font-size: 1.2rem; font-weight: 700; }
+    .subscores { font-size: .8rem; opacity: .8; margin: .5rem 0; }
+    .subscores span { margin-right: .8rem; }
+    .reasons { margin: .5rem 0; padding-left: 1.1rem; font-size: .9rem; }
+    .chart { height: 360px; margin-top: .75rem; }
+    footer { margin-top: 2rem; font-size: .85rem; opacity: .7; }
+  </style>
 </head>
 <body>
-  <h1>{{ title }} — {{ timeframe }}</h1>
-  {# TODO: run summary, accumulation section, distribution section, TV widgets,
-     and the required TradingView attribution link. #}
+  <header>
+    <h1>{{ title }} — {{ timeframe | capitalize }}</h1>
+    <p class="summary">
+      Generated {{ generated_ts }}
+      · scanned {{ summary.scanned | default('?') }}
+      · flagged {{ summary.flagged | default('?') }}
+      · skipped {{ summary.skipped | default('?') }}
+      · errored {{ summary.errored | default('?') }}
+    </p>
+  </header>
+
+  {% macro render_card(c) %}
+  <article class="card {{ c.direction }}">
+    <div class="card-head">
+      <span class="ticker">{{ c.ticker }}</span>
+      <span class="symbol">{{ c.symbol }}</span>
+      <span class="direction {{ c.direction }}">{{ c.direction }}</span>
+      <span class="score">{{ '%.0f' | format(c.score) }}/100</span>
+    </div>
+    <div class="subscores">
+      {% for name, value in c.sub_scores.items() %}<span>{{ name }}: {{ '%+.0f' | format(value) }}</span>{% endfor %}
+    </div>
+    {% if c.reasons %}<ul class="reasons">{% for r in c.reasons %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
+    <div class="chart" data-symbol="{{ c.symbol }}"></div>
+  </article>
+  {% endmacro %}
+
+  <section>
+    <h2>Accumulation — long candidates ({{ accumulation | length }})</h2>
+    {% for c in accumulation %}{{ render_card(c) }}{% else %}<p>None flagged.</p>{% endfor %}
+  </section>
+
+  <section>
+    <h2>Distribution — short candidates ({{ distribution | length }})</h2>
+    {% for c in distribution %}{{ render_card(c) }}{% else %}<p>None flagged.</p>{% endfor %}
+  </section>
+
+  <footer>
+    <p>Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a>.</p>
+  </footer>
+
+  <script>
+    // Lazy-load TradingView Advanced Chart widgets when a card scrolls into view, so a
+    // report with many candidates stays responsive (SPEC §8.1).
+    const INTERVAL = {{ interval | tojson }};
+    const THEME = {{ theme | tojson }};
+    const observer = new IntersectionObserver((entries, obs) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const host = entry.target;
+        obs.unobserve(host);
+        const widget = document.createElement("div");
+        widget.className = "tradingview-widget-container__widget";
+        host.appendChild(widget);
+        const script = document.createElement("script");
+        script.type = "text/javascript";
+        script.async = true;
+        script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+        script.innerHTML = JSON.stringify({
+          symbol: host.dataset.symbol, interval: INTERVAL, theme: THEME,
+          width: "100%", height: 360, style: "1", locale: "en", allow_symbol_change: false
+        });
+        host.appendChild(script);
+      }
+    }, { rootMargin: "200px" });
+    document.querySelectorAll(".chart").forEach((el) => observer.observe(el));
+  </script>
 </body>
 </html>
