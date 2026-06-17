@@ -1,4 +1,5 @@
-# Scheduled Wyckoff scan (SPEC §9). Runs unattended, commits results back to the repo.
+# Scheduled Wyckoff scan (SPEC §9). Runs unattended; publishes results to the
+# gh-pages branch (served by GitHub Pages) so `main` stays code-only.
 # GitHub cron is UTC and not guaranteed to the minute.
 name: scan
 
@@ -14,9 +15,9 @@ on:
     - cron: "0 14 * * 6"     # Weekly: Saturday, after Friday close settles
 
 permissions:
-  contents: write            # commit output/ back to the repo
+  contents: write            # publish to the gh-pages branch
 
-concurrency:                 # never let two scans race on the committed output
+concurrency:                 # never let two scans race on the published output
   group: scan
   cancel-in-progress: false
 
@@ -45,19 +46,23 @@ jobs:
             echo "value=daily" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Restore persistent state from gh-pages
+        run: |
+          mkdir -p output
+          git fetch origin gh-pages --depth=1 || true
+          # signals.csv accumulates; state.json drives dedup/MTF — carry them forward.
+          git show origin/gh-pages:signals.csv > output/signals.csv 2>/dev/null || true
+          git show origin/gh-pages:state.json  > output/state.json  2>/dev/null || true
+
       - name: Run scanner
         env:
           NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
-          REPORT_BASE_URL: ${{ secrets.REPORT_BASE_URL }}
+          REPORT_BASE_URL: https://likelythatalex.github.io/trade-sniffer
         run: python -m src.scanner --timeframe ${{ steps.tf.outputs.value }}
 
-      - name: Commit results
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          # latest_<tf>.html + watchlist are gitignored locally, so force-add them.
-          # Dated report_<tf>_<date>.html is intentionally NOT committed (repo bloat;
-          # regenerable; use GitHub Pages if you want dated history hosted).
-          git add -f output/latest_*.html output/watchlist_*.txt output/signals.csv output/state.json
-          git diff --quiet --cached || git commit -m "scan: ${{ steps.tf.outputs.value }} $(date -u +%F)"
-          git push
+      - name: Publish output to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./output
+          keep_files: true   # keep prior dated reports + the other timeframe's files

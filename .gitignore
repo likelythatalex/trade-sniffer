@@ -21,11 +21,10 @@ venv/
 env/
 
 # --- Generated scanner output ---
-# Dated HTML dashboards, watchlists, and cached data are regenerated each run.
-# signals.csv is intentionally NOT ignored: it's the backtesting/calibration dataset.
-output/report_*.html
-output/latest*.html
-output/watchlist_*.txt
+# main is code-only: ALL scanner output (reports, watchlists, signals.csv, state.json)
+# lives on the gh-pages branch, published by CI. Keep the dir but ignore its contents.
+output/*
+!output/.gitkeep
 .cache/
 data_cache/
 *.cache

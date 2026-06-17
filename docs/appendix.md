@@ -257,8 +257,9 @@ version. Think of it as a README for the *domain*, not the code.
   (attribution kept), accumulation/distribution sections ranked by score; plus
   `write_tv_import_file` (secondary `.txt`) and `append_signals` (schema-stable log).
 - **Status:** `IMPLEMENTED` (`report.py`, tested in `tests/test_report.py`); wired
-  end-to-end by `scanner.py` — a live run produces a populated dashboard + watchlist +
-  signals.csv (M3 reached).
+  end-to-end by `scanner.py`. CI publishes output to the **gh-pages** branch (GitHub Pages),
+  so `main` stays code-only and the dashboard is viewable at
+  `https://<user>.github.io/trade-sniffer/latest_<tf>.html`.
 
 ### Notification Surface
 - **Plain meaning:** Where you get pinged about new setups.

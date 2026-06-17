@@ -135,7 +135,7 @@ def run_timeframe(
         write_tv_import_file(cards, timeframe, config)
     append_signals(signal_rows, Path(config.output.dir) / "signals.csv")
 
-    _notify(config, timeframe, transitions, current_qualifying, cold_start, today or date.today())
+    _notify(config, timeframe, transitions, current_qualifying, cold_start)
     state[timeframe] = TimeframeState(qualifying=current_qualifying, run_ts=run_ts)
     save_state(state_path, state)
     return counts
@@ -186,7 +186,6 @@ def _notify(
     transitions: dict[str, str],
     current_qualifying: dict[str, dict[str, Any]],
     cold_start: bool,
-    today: date,
 ) -> None:
     """Build the run summary and push it (NEW/FAILED only; suppressed when empty)."""
     notify_cfg = config.output.notify
@@ -204,7 +203,7 @@ def _notify(
         "new": new_items,
         "failed": failed,
         "cold_start": cold_start,
-        "report_url": _report_url(notify_cfg, timeframe, today),
+        "report_url": _report_url(notify_cfg, timeframe),
     }
 
     if notify_cfg.suppress_empty and not cold_start and not has_transitions(summary):
@@ -216,9 +215,10 @@ def _notify(
     make_notifier(notify_cfg.channel, webhook).send(summary)
 
 
-def _report_url(notify_cfg: Any, timeframe: str, today: date) -> str | None:
+def _report_url(notify_cfg: Any, timeframe: str) -> str | None:
+    # Link to latest_<tf>.html — always published, so the link is never stale/404.
     base = os.environ.get(notify_cfg.report_base_url_env)
-    return f"{base.rstrip('/')}/report_{timeframe}_{today.isoformat()}.html" if base else None
+    return f"{base.rstrip('/')}/latest_{timeframe}.html" if base else None
 
 
 def _signals_row(

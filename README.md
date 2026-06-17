@@ -73,17 +73,20 @@ All thresholds, weights, lookbacks, and enabled strategies live in [config.yaml]
 
 ## Scheduling (GitHub Actions)
 
-`.github/workflows/scan.yml` runs daily (after US close) and weekly (Saturday), commits the
-results back to the repo, and notifies Discord. To enable notifications, add repository
-**secrets** (Settings → Secrets and variables → Actions):
+`.github/workflows/scan.yml` runs daily (after US close) and weekly (Saturday). It restores
+the persistent state from `gh-pages`, runs the scan, **publishes all output to the `gh-pages`
+branch** (served by GitHub Pages — so `main` stays code-only), and notifies Discord.
 
-- `NOTIFY_WEBHOOK_URL` — your Discord webhook URL (where the message is POSTed).
-- `REPORT_BASE_URL` *(optional)* — a public base URL where the report is hosted (e.g. GitHub
-  Pages). Used only to build a clickable report link inside the Discord message; if unset, the
-  message omits the link. **This is separate from the webhook.**
+- The dashboard is published at **`https://<user>.github.io/trade-sniffer/latest_daily.html`**
+  (and `latest_weekly.html`). `signals.csv` and `state.json` accumulate on `gh-pages`.
+- Add one repository **secret** (Settings → Secrets and variables → Actions):
+  `NOTIFY_WEBHOOK_URL` — your Discord webhook. `REPORT_BASE_URL` is set in the workflow to the
+  Pages URL (so the Discord message links to the live dashboard); no secret needed for it.
+- GitHub Pages requires the repo to be **public** on a free plan (private Pages needs a paid
+  plan). `tests.yml` runs the suite on every push/PR.
 
-Test the workflow manually via the Actions tab → *scan* → *Run workflow*. Note: GitHub
-disables scheduled workflows after ~60 days of repo inactivity (a commit re-arms them).
+Test manually via the Actions tab → *scan* → *Run workflow*. Note: GitHub disables scheduled
+workflows after ~60 days of repo inactivity (a commit re-arms them).
 
 ### Off-schedule / non-trading-day runs
 
