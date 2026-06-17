@@ -38,9 +38,10 @@ version. Think of it as a README for the *domain*, not the code.
 | `EXCLUDED` | Considered and intentionally left out (with the reason). |
 
 ### Status legend for THIS version
-> **Version: pre-implementation (spec complete, no code yet).** Everything below is
-> therefore `PLANNED`, `FUTURE`, or `EXCLUDED`. The first code version should flip items to
-> `IMPLEMENTED`/`PARTIAL` as they land. Do not leave this legend stale.
+> **Version: implementation in progress.** `config.py` (load/validate/per-timeframe
+> resolution) and `features.py` (Per-Stock Normalization, below) have landed and are
+> `IMPLEMENTED`; the remaining domain concepts are still `PLANNED`/`FUTURE`/`EXCLUDED`.
+> Flip items to `IMPLEMENTED`/`PARTIAL` as they land. Do not leave this legend stale.
 
 ---
 
@@ -125,10 +126,15 @@ version. Think of it as a README for the *domain*, not the code.
 ### Per-Stock Normalization (relative features)
 - **Plain meaning:** "High volume" or "narrow spread" only mean something relative to a
   given stock's own history; absolute thresholds are meaningless across a universe.
-- **How it's implemented here:** A normalization pass produces `volume_ratio`,
-  `volume_pctile`, `spread_atr`, `spread_pctile`, `close_position` on a rolling window;
-  config holds ratios/percentiles, not absolutes. Methodology §1.
-- **Status:** `PLANNED` (`features.py`). **Foundational — built first.**
+- **How it's implemented here:** `features.compute_features` produces `volume_ratio`
+  (vs rolling **median** volume), `volume_pctile`, `spread_atr` (bar range ÷ ATR, where
+  ATR = rolling mean of True Range), `spread_pctile`, and `close_position` on a trailing
+  rolling window that includes the current bar. Degenerate bars (zero range, zero
+  ATR/median) emit NaN per-feature (no coercion); bars before `baseline_window` are
+  unscored. Config holds ratios/percentiles, not absolutes. Methodology §1.
+- **Status:** `IMPLEMENTED` (`features.py`, tested in `tests/test_features.py`).
+  **Foundational — built first.** Thresholds that *consume* these features remain
+  `[TUNABLE]`; the features themselves are done.
 
 ### Relative Strength vs. SPY (RS)
 - **Plain meaning:** A stock holding up better than the index on weak tape (or worse on
