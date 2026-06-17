@@ -1,0 +1,19 @@
+{
+  "daily": {
+    "run_ts": "2026-06-17T11:52:50+00:00",
+    "qualifying": {
+      "FRT": {
+        "score": 70.91,
+        "direction": "distribution"
+      },
+      "PSA": {
+        "score": 70.48,
+        "direction": "distribution"
+      },
+      "TYL": {
+        "score": 83.19,
+        "direction": "accumulation"
+      }
+    }
+  }
+}
