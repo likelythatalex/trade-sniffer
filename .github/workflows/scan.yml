@@ -1,5 +1,4 @@
-# Scheduled Wyckoff scan (SPEC §9). DRAFT scaffold — the run step calls the scanner,
-# which is not implemented yet, so for now use workflow_dispatch to test wiring only.
+# Scheduled Wyckoff scan (SPEC §9). Runs unattended, commits results back to the repo.
 # GitHub cron is UTC and not guaranteed to the minute.
 name: scan
 
@@ -11,11 +10,15 @@ on:
         required: true
         default: daily
   schedule:
-    - cron: "0 22 * * 1-5"   # Daily: ~22:00 UTC on weekdays, after US close
+    - cron: "0 22 * * 1-5"   # Daily: ~22:00 UTC weekdays, after US close
     - cron: "0 14 * * 6"     # Weekly: Saturday, after Friday close settles
 
 permissions:
-  contents: write            # commit output/ (report, watchlist, signals.csv) back to the repo
+  contents: write            # commit output/ back to the repo
+
+concurrency:                 # never let two scans race on the committed output
+  group: scan
+  cancel-in-progress: false
 
 jobs:
   scan:
@@ -31,11 +34,30 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # TODO: pick timeframe from schedule vs. dispatch input once scanner.py lands.
+      - name: Pick timeframe (dispatch input, else which cron fired)
+        id: tf
+        run: |
+          if [ -n "${{ github.event.inputs.timeframe }}" ]; then
+            echo "value=${{ github.event.inputs.timeframe }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 14 * * 6" ]; then
+            echo "value=weekly" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=daily" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run scanner
         env:
           NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
           REPORT_BASE_URL: ${{ secrets.REPORT_BASE_URL }}
-        run: python -m src.scanner
+        run: python -m src.scanner --timeframe ${{ steps.tf.outputs.value }}
 
-      # TODO: commit output/ back (report, watchlist, signals.csv) to preserve history.
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # latest_<tf>.html + watchlist are gitignored locally, so force-add them.
+          # Dated report_<tf>_<date>.html is intentionally NOT committed (repo bloat;
+          # regenerable; use GitHub Pages if you want dated history hosted).
+          git add -f output/latest_*.html output/watchlist_*.txt output/signals.csv output/state.json
+          git diff --quiet --cached || git commit -m "scan: ${{ steps.tf.outputs.value }} $(date -u +%F)"
+          git push
