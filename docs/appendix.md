@@ -220,10 +220,13 @@ version. Think of it as a README for the *domain*, not the code.
 - **Plain meaning:** Free data has errors (zero-volume bars, spikes, bad split adjustment); a
   single bad bar can fake a volume climax.
 - **How it's implemented here:** A conservative detect → repair-the-obvious → else-exclude
-  step that *never invents data* and logs what it touched. Runs **before** normalization so
-  bad bars don't poison rolling baselines. Pipeline: `data → data_quality → features →
-  strategy`.
-- **Status:** `PLANNED` (`data_quality.py`).
+  step that *never invents data* and logs what it touched (`data_quality.clean`). Repairs:
+  drop duplicate timestamps, null-OHLC and zero/null-volume bars. Excludes: unexplained
+  range spike (range >> trailing ATR), split-adjustment mismatch with no corporate-action
+  basis, or too few valid bars. Runs **before** normalization. Pipeline: `data →
+  data_quality → features → strategy`.
+- **Status:** `PARTIAL` (`data_quality.py`, tested in `tests/test_data_quality.py`):
+  calendar-based missing-bar detection/forward-fill deferred (needs a market calendar).
 
 ### Resampling vs. Native Timeframe
 - **Plain meaning:** Weekly bars can be aggregated from daily or fetched directly; the choice
