@@ -60,6 +60,8 @@ def test_resolve_wyckoff_params_merges_weekly_over_defaults(
     assert weekly["trend_lookback"] == 60
     # daily uses defaults unchanged.
     assert daily["range_lookback"] == 60
+    # sub_weights ride along in the resolved bag (so the strategy needs only params).
+    assert weekly["sub_weights"]["volume_behavior"] == 35
 
 
 # --- scoring_window must include the COMPLETE depth-lookback set ---------------

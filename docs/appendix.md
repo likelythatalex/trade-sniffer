@@ -70,21 +70,25 @@ version. Think of it as a README for the *domain*, not the code.
   buying quietly) and distribution (selling quietly) before markup/markdown.
 - **How it's implemented here:** As *structural fingerprint detection + a conviction score*,
   **not** definitive phase labeling. See `docs/wyckoff_methodology.md`.
-- **Status:** `PLANNED` (`strategies/wyckoff.py`).
+- **Status:** `PARTIAL` (`strategies/wyckoff.py`, tested in `tests/test_wyckoff.py`).
+  First-pass scoring implemented (range/volume/spring + trend context); a valid range is a
+  precondition. Sub-score weights are calibration seeds, and the RS/MTF/volatility-contraction
+  confirmation inputs still abstain (need `data.py`/`state.py`).
 
 ### Accumulation / Distribution
 - **Plain meaning:** A trading range where informed money is building a position
   (accumulation → bullish) or unloading one (distribution → bearish).
 - **How it's implemented here:** Direction emitted per ticker/timeframe; accumulation = long
   candidate, distribution = short candidate. Both actionable.
-- **Status:** `PLANNED`.
+- **Status:** `IMPLEMENTED` (`strategies/wyckoff.py` + `combiner.py`): a signed composite
+  yields `accumulation`/`distribution`/`none` plus a 0–100 conviction score.
 
 ### Effort vs. Result
 - **Plain meaning:** Volume is effort, price movement is result; a mismatch (big effort, no
   result) signals absorption or exhaustion.
 - **How it's implemented here:** `volume_ratio` high + `spread_atr` low over normalized
-  features. See methodology §2.1.
-- **Status:** `PLANNED` (`features.py` + `strategies/wyckoff.py`).
+  features, directional by range location (`score_volume_behavior`). See methodology §2.1.
+- **Status:** `IMPLEMENTED` (`features.py` + `strategies/wyckoff.py`).
 
 ### No Demand / No Supply
 - **Plain meaning:** A narrow-range bar on low volume into resistance (no demand) or support
@@ -92,36 +96,40 @@ version. Think of it as a README for the *domain*, not the code.
 - **How it's implemented here:** Relative-feature condition — narrow `spread_atr` + volume
   **below the rolling median** (`no_demand_supply_median_window`), directional, near a range
   extreme (`range_extreme_fraction` thirds, SPEC §6.1). Median form chosen over "prev N bars"
-  for universe stability. Methodology §2.2.
-- **Status:** `PLANNED`.
+  for universe stability. Realized as `volume_ratio < 1` (below the rolling median) on a
+  narrow `spread_atr` bar near the matching extreme. Methodology §2.2.
+- **Status:** `IMPLEMENTED` (`strategies/wyckoff.py`, `score_volume_behavior`).
 
 ### Climax (selling / buying)
 - **Plain meaning:** A volume peak that marks exhaustion of a move, often preceding a
   reversal and the start of a range.
-- **How it's implemented here:** Rolling `volume_pctile` max + reversal check. Climax feeds
-  the `volume_behavior` sub-score and provides *context* for range scoring; in v1 it does
-  **not** set the range boundary — the support/resistance band does (SPEC §6.1). Climax-
-  anchored boundaries are a FUTURE refinement. Methodology §2.3.
-- **Status:** `PLANNED`.
+- **How it's implemented here:** v1 uses a volume-EXPANSION proxy (`volume_ratio` ≥
+  `high_volume_ratio` in the recent `climax_window`, at a range extreme), feeding the
+  `volume_behavior` sub-score. The reversal/reaction confirmation and the `volume_pctile`
+  alternative are deferred. Climax does **not** set the range boundary — the band does
+  (SPEC §6.1); climax-anchored boundaries are FUTURE. Methodology §2.3.
+- **Status:** `PARTIAL` (`strategies/wyckoff.py`): expansion proxy only; reaction check TODO.
 
 ### Spring / Upthrust
 - **Plain meaning:** A false breakdown below support (spring, bullish) or false breakout
   above resistance (upthrust, bearish) that snaps back into the range — a classic Wyckoff
   trap of the uninformed.
-- **How it's implemented here:** New low/high vs. `spring_lookback` range + close back inside
-  within `spring_snapback_bars` on a `spring_wick_pct` rejection wick, volume corroboration
-  bonus. Methodology §2.4.
-- **Status:** `PLANNED`.
+- **How it's implemented here:** New low/high vs. the established band over `spring_lookback`
+  + close back inside within `spring_snapback_bars` (`detect_spring_upthrust`). The
+  `spring_wick_pct` filter and richer volume corroboration are seeds not yet applied.
+  Methodology §2.4.
+- **Status:** `PARTIAL` (`strategies/wyckoff.py`): break + snapback done; wick% refinement TODO.
 
 ### Trading Range / Phases (A–E)
 - **Plain meaning:** The consolidation where accumulation/distribution happens; Wyckoff
   subdivides it into phases A–E. Later phases (C/D/E) are where entries are favored;
   Phase-C spring/upthrust is the highest-reward, highest-risk spot.
 - **How it's implemented here:** Range **boundaries defined by a support/resistance band**
-  over `range_lookback` (v1 — SPEC §6.1), validated by `range_max_width_pct` /
-  `min_range_bars`. Phase context used as *scoring bias* (e.g. favor later-phase setups), not
-  asserted as a hard label. Climax-anchored boundaries are FUTURE.
-- **Status:** `PARTIAL`-by-design — range yes, full phase labeling intentionally not.
+  over `range_lookback` (`detect_trading_range`, SPEC §6.1), validated by `range_max_width_pct`
+  / `min_range_bars`; a valid range is a **precondition** for any directional call. Phase
+  context used as *scoring bias*, not a hard label. Climax-anchored boundaries are FUTURE.
+- **Status:** `PARTIAL`-by-design (`strategies/wyckoff.py`) — range band implemented; full
+  phase labeling intentionally not.
 
 ### Per-Stock Normalization (relative features)
 - **Plain meaning:** "High volume" or "narrow spread" only mean something relative to a
@@ -169,8 +177,11 @@ version. Think of it as a README for the *domain*, not the code.
 - **Plain meaning:** Rather than a yes/no call, rank candidates 0–100; independent signals
   agreeing should raise the score.
 - **How it's implemented here:** Per-strategy `StrategyResult` scores combined in
-  `combiner.py`. v1 = one strategy, so composite = Wyckoff score.
-- **Status:** `PLANNED` (stacking machinery present, only one strategy wired).
+  `combiner.combine` (weighted average; direction from the strongest contributor). v1 = one
+  strategy, so composite = Wyckoff score. Confirmation *stacking* across strategies awaits a
+  second strategy.
+- **Status:** `PARTIAL` (`combiner.py`, tested in `tests/test_combiner.py`): aggregation done;
+  multi-strategy stacking/correlation still `FUTURE`.
 
 ### Signal Correlation Awareness
 - **Plain meaning:** Stacked signals only add information if they're *independent*; three

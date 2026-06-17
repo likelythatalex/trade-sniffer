@@ -162,9 +162,12 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
 
 def resolve_wyckoff_params(config: Config, timeframe: str) -> dict[str, Any]:
     """Return Wyckoff params for ``timeframe``: ``defaults`` overlaid with
-    ``per_timeframe[tf]`` (key by key). The single place config merging happens."""
+    ``per_timeframe[tf]`` (key by key), plus ``sub_weights``. The single place config
+    merging happens, so the strategy reads everything from one bag and never touches
+    config structure. ``sub_weights`` is timeframe-independent (rides along unchanged)."""
     params = dict(config.wyckoff.defaults)
     params.update(config.wyckoff.per_timeframe.get(timeframe, {}))
+    params["sub_weights"] = dict(config.wyckoff.sub_weights)
     return params
 
 
