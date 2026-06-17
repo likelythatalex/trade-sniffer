@@ -86,6 +86,42 @@ def test_run_timeframe_fail_soft_on_data_error(tmp_path: Path, monkeypatch: pyte
     assert counts["scanned"] == 1 and counts["skipped"] == 1  # logged + skipped, no crash
 
 
+def test_run_timeframe_uses_explicit_tickers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = config_for(tmp_path)
+    fetch_result = FetchResult(df=accumulation_df(), exchange="NYSE", corporate_actions=pd.Series(dtype=float))
+    seen: list[str] = []
+
+    def fake_fetch(ticker, tf, c, today=None):
+        seen.append(ticker)
+        return fetch_result
+
+    # load_universe must NOT be consulted when explicit tickers are given.
+    def fail_universe(_path):
+        raise AssertionError("load_universe should not be called in on-demand mode")
+
+    monkeypatch.setattr(scanner, "load_universe", fail_universe)
+    monkeypatch.setattr(scanner, "fetch_ohlcv", fake_fetch)
+
+    counts = scanner.run_timeframe("daily", cfg, today=date(2024, 6, 1), tickers=["COIN", "PLTR"])
+    assert seen == ["COIN", "PLTR"]
+    assert counts["scanned"] == 2
+
+
+def test_no_liquidity_gate_keeps_thin_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Real liquidity floor would skip this low-$-volume fixture; the bypass keeps it.
+    out = dataclasses.replace(CONFIG.output, dir=str(tmp_path))
+    cfg = dataclasses.replace(CONFIG, output=out)  # real liquidity floor in force
+    fetch_result = FetchResult(df=accumulation_df(), exchange="NYSE", corporate_actions=pd.Series(dtype=float))
+    monkeypatch.setattr(scanner, "load_universe", lambda _p: ["THIN"])
+    monkeypatch.setattr(scanner, "fetch_ohlcv", lambda t, tf, c, today=None: fetch_result)
+
+    gated = scanner.run_timeframe("daily", cfg, today=date(2024, 6, 1), apply_liquidity_gate=True)
+    assert gated["skipped"] == 1  # skipped by the gate
+
+    ungated = scanner.run_timeframe("daily", cfg, today=date(2024, 6, 1), apply_liquidity_gate=False)
+    assert ungated["skipped"] == 0  # evaluated despite thin volume
+
+
 def _empty_quality():
     from src.data_quality import QualityReport
 

@@ -17,6 +17,7 @@ Run from the repo root::
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import logging
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -37,12 +38,23 @@ from .universe import load_universe, passes_liquidity_gate
 logger = logging.getLogger(__name__)
 
 
-def run_timeframe(timeframe: str, config: Config, today: date | None = None) -> dict[str, int]:
-    """Scan the whole universe for one timeframe and write all outputs.
+def run_timeframe(
+    timeframe: str,
+    config: Config,
+    today: date | None = None,
+    tickers: list[str] | None = None,
+    apply_liquidity_gate: bool = True,
+) -> dict[str, int]:
+    """Scan a universe for one timeframe and write all outputs.
+
+    Args:
+        tickers: explicit list to scan (on-demand mode); defaults to ``universe.txt``.
+        apply_liquidity_gate: set False to bypass the liquidity filter (on-demand
+            scans of specific names you already trust).
 
     Returns run counts (scanned / flagged / skipped / errored).
     """
-    universe = load_universe(Path(config.universe_file))
+    universe = tickers if tickers is not None else load_universe(Path(config.universe_file))
     enabled = {name: spec for name, spec in config.strategies.items() if spec.enabled}
     strategies = {name: get_strategy(name) for name in enabled}
     weights = {name: spec.weight for name, spec in enabled.items()}
@@ -59,11 +71,12 @@ def run_timeframe(timeframe: str, config: Config, today: date | None = None) -> 
         try:
             fetched = fetch_ohlcv(ticker, timeframe, config, today=today)
 
-            passes, reason = passes_liquidity_gate(fetched.df, config.liquidity)
-            if not passes:
-                counts["skipped"] += 1
-                logger.info("skip %s: %s", ticker, reason)
-                continue
+            if apply_liquidity_gate:
+                passes, reason = passes_liquidity_gate(fetched.df, config.liquidity)
+                if not passes:
+                    counts["skipped"] += 1
+                    logger.info("skip %s: %s", ticker, reason)
+                    continue
 
             cleaned, quality = clean(fetched.df, fetched.corporate_actions, config.data_quality)
             if quality.excluded:
@@ -102,13 +115,24 @@ def main(argv: list[str] | None = None) -> None:
     """CLI entry: load + validate config, then run each configured timeframe."""
     parser = argparse.ArgumentParser(description="Wyckoff accumulation/distribution scanner.")
     parser.add_argument("--timeframe", choices=["daily", "weekly"], help="scan a single timeframe")
+    parser.add_argument("--tickers", help="comma-separated tickers to scan instead of universe.txt (on-demand)")
+    parser.add_argument("--no-liquidity-gate", action="store_true", help="bypass the liquidity filter")
+    parser.add_argument("--threshold", type=float, help="override the watchlist score threshold (0-100)")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
     config = load_config()
+    if args.threshold is not None:
+        config = dataclasses.replace(config, scoring=dataclasses.replace(config.scoring, watchlist_threshold=args.threshold))
+
+    tickers = [t.strip().upper() for t in args.tickers.split(",") if t.strip()] if args.tickers else None
+    apply_liquidity_gate = not args.no_liquidity_gate
+
     timeframes = [args.timeframe] if args.timeframe else config.timeframes
     for timeframe in timeframes:
-        counts = run_timeframe(timeframe, config)
+        counts = run_timeframe(
+            timeframe, config, tickers=tickers, apply_liquidity_gate=apply_liquidity_gate
+        )
         logger.info("%s done: %s", timeframe, counts)
 
 
