@@ -118,10 +118,13 @@ version. Think of it as a README for the *domain*, not the code.
   above resistance (upthrust, bearish) that snaps back into the range — a classic Wyckoff
   trap of the uninformed.
 - **How it's implemented here:** New low/high vs. the established band over `spring_lookback`
-  + close back inside within `spring_snapback_bars` (`detect_spring_upthrust`). The
-  `spring_wick_pct` filter and richer volume corroboration are seeds not yet applied.
-  Methodology §2.4.
-- **Status:** `PARTIAL` (`strategies/wyckoff.py`): break + snapback done; wick% refinement TODO.
+  + close back inside within `spring_snapback_bars` is the GATE (`detect_spring_upthrust`).
+  Given detection, the magnitude scales from `SPRING_BASE_FRACTION` up to full with two
+  equal-weight confirmations on the false-break bar: a rejection wick (`spring_wick_pct`) and
+  volume corroboration (above-median `volume_ratio`). Methodology §2.4.
+- **Status:** `IMPLEMENTED` (`strategies/wyckoff.py`, tested in `tests/test_wyckoff.py`):
+  break+snapback + wick% + volume corroboration. Volume corroboration is a simple above-median
+  seed (the fuller impulse/correction-leg rule stays `[FUTURE]`).
 
 ### Trading Range / Phases (A–E)
 - **Plain meaning:** The consolidation where accumulation/distribution happens; Wyckoff

@@ -128,7 +128,7 @@ def test_detect_spring() -> None:
     df = bars([110.0] * 15, lows, closes, [105.0] * 15, [100.0] * 15)
     result = detect_spring_upthrust(df, compute_features(df, 5), {}, make_params(range_lookback=15))
     assert result["is_spring"] is True
-    assert result["score"] == 100.0
+    assert result["score"] > 0  # magnitude is a calibration seed; assert direction
 
 
 def test_detect_upthrust() -> None:
@@ -137,7 +137,25 @@ def test_detect_upthrust() -> None:
     df = bars(highs, [100.0] * 15, closes, [105.0] * 15, [100.0] * 15)
     result = detect_spring_upthrust(df, compute_features(df, 5), {}, make_params(range_lookback=15))
     assert result["is_upthrust"] is True
-    assert result["score"] == -100.0
+    assert result["score"] < 0
+
+
+def test_spring_wick_and_volume_boost_score() -> None:
+    # Same break+snapback, but a textbook shakeout (deep rejection wick + volume surge on
+    # the spring bar) must outscore a marginal poke that closes weakly on flat volume.
+    base_lows = [100.0] * 10 + [96.0, 101.0, 101.0, 101.0, 101.0]
+
+    weak_closes = [105.0] * 10 + [97.0, 104.0, 104.0, 104.0, 104.0]  # spring bar closes near its low
+    weak = bars([110.0] * 15, base_lows, weak_closes, [105.0] * 15, [100.0] * 15)
+    weak_result = detect_spring_upthrust(weak, compute_features(weak, 5), {}, make_params(range_lookback=15))
+
+    strong_closes = [105.0] * 10 + [109.5, 104.0, 104.0, 104.0, 104.0]  # closes back near the high
+    strong_vols = [100.0] * 10 + [500.0, 100.0, 100.0, 100.0, 100.0]  # volume surge on the spring bar
+    strong = bars([110.0] * 15, base_lows, strong_closes, [105.0] * 15, strong_vols)
+    strong_result = detect_spring_upthrust(strong, compute_features(strong, 5), {}, make_params(range_lookback=15))
+
+    assert strong_result["score"] > weak_result["score"]
+    assert "on a rejection wick" in " ".join(strong_result["reasons"])
 
 
 # --- score_confirmation (trend context) --------------------------------------

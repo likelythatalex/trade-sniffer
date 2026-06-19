@@ -28,6 +28,8 @@ DIRECTION_FLOOR = 10.0  # |composite| below this -> direction "none"
 TREND_FULL_SCALE = 0.20  # net move over trend_lookback that maps to full trend conviction
 RS_FULL_SCALE = 0.10  # [TUNABLE] out/under-performance vs SPY over the lookback for full RS
 CONTRACTION_FULL_SCALE = 0.5  # [TUNABLE] recent vol this fraction below earlier vol = full coil
+SPRING_BASE_FRACTION = 0.5  # [TUNABLE] a detected spring/upthrust scores at least this much;
+#                              wick rejection + volume corroboration fill the rest to full.
 
 _SUB_SCORES = ("range_structure", "volume_behavior", "spring_upthrust", "confirmation")
 
@@ -212,11 +214,18 @@ def detect_spring_upthrust(
     df: pd.DataFrame, features: pd.DataFrame, range_info: dict[str, Any], params: dict[str, Any]
 ) -> dict[str, Any]:
     """§6.3 — spring (false break below support) / upthrust (false break above
-    resistance), confirmed by a snapback close back inside the range."""
+    resistance), confirmed by a snapback close back inside the range.
+
+    Detection (break + snapback) is the GATE; given it, the magnitude scales from a
+    base floor up to full with two quality confirmations — a rejection wick on the
+    false-break bar (``spring_wick_pct``) and volume corroboration — so a textbook
+    shakeout outscores a marginal poke. (Quality weights are equal-weight seeds.)
+    """
     n = len(df)
     spring_lookback = int(params["spring_lookback"])
     snapback = int(params["spring_snapback_bars"])
     range_lookback = min(int(params["range_lookback"]), n)
+    wick_threshold = float(params["spring_wick_pct"]) / 100.0
 
     result = {"score": 0.0, "is_spring": False, "is_upthrust": False, "reasons": []}
 
@@ -239,23 +248,69 @@ def detect_spring_upthrust(
     if breaks_down and last_close >= established_support:
         first = breaks_down[0]
         if any(c >= established_support for c in recent_closes[first : first + snapback + 1]):
+            spring_idx = established_end + min(breaks_down, key=lambda i: recent_lows[i])  # deepest poke
+            quality, q_reasons = _false_break_quality(df, features, spring_idx, established_end, "spring", wick_threshold)
             result["is_spring"] = True
-            result["score"] = 100.0
-            result["reasons"] = ["spring: false break below support, recovered inside"]
+            result["score"] = 100.0 * _quality_to_strength(quality)
+            result["reasons"] = ["spring: false break below support, recovered inside"] + q_reasons
 
     # Upthrust: mirror image at resistance.
     breaks_up = [i for i, high in enumerate(recent_highs) if high > established_resistance]
     if breaks_up and last_close <= established_resistance:
         first = breaks_up[0]
         if any(c <= established_resistance for c in recent_closes[first : first + snapback + 1]):
+            up_idx = established_end + max(breaks_up, key=lambda i: recent_highs[i])  # highest poke
+            quality, q_reasons = _false_break_quality(df, features, up_idx, established_end, "upthrust", wick_threshold)
             result["is_upthrust"] = True
-            result["score"] = -100.0
-            result["reasons"] = ["upthrust: false break above resistance, rejected"]
+            result["score"] = -100.0 * _quality_to_strength(quality)
+            result["reasons"] = ["upthrust: false break above resistance, rejected"] + q_reasons
 
     if result["is_spring"] and result["is_upthrust"]:  # ambiguous -> abstain
         result["score"] = 0.0
         result["reasons"] = []
     return result
+
+
+def _quality_to_strength(quality: float) -> float:
+    """Map a [0,1] confirmation quality to a [BASE,1] strength: a detected false break
+    always counts (the base floor), confirmations fill the rest."""
+    return SPRING_BASE_FRACTION + (1.0 - SPRING_BASE_FRACTION) * quality
+
+
+def _false_break_quality(
+    df: pd.DataFrame,
+    features: pd.DataFrame,
+    bar_idx: int,
+    recent_start: int,
+    kind: str,
+    wick_threshold: float,
+) -> tuple[float, list[str]]:
+    """Quality of a false-break bar in [0,1] = equal-weight mean of two confirmations:
+    a rejection wick (closed back toward the range, ``spring_wick_pct``) and volume
+    corroboration (above-median volume on the bar). Returns ``(quality, reasons)``."""
+    high = float(df["high"].iloc[bar_idx])
+    low = float(df["low"].iloc[bar_idx])
+    close = float(df["close"].iloc[bar_idx])
+    bar_range = high - low
+    reasons: list[str] = []
+
+    # Rejection wick: for a spring, closing near the high rejects the lows; mirror for upthrust.
+    if bar_range > 0:
+        rejection = (close - low) / bar_range if kind == "spring" else (high - close) / bar_range
+    else:
+        rejection = 0.0
+    wick_ok = rejection >= wick_threshold
+    if wick_ok:
+        reasons.append("on a rejection wick")
+
+    # Volume corroboration: the shakeout/poke bar trades above its rolling-median volume.
+    bar_volume_ratio = features["volume_ratio"].iloc[bar_idx]
+    volume_ok = bool(pd.notna(bar_volume_ratio) and bar_volume_ratio > 1.0)
+    if volume_ok:
+        reasons.append("with volume corroboration")
+
+    quality = (float(wick_ok) + float(volume_ok)) / 2.0
+    return quality, reasons
 
 
 def score_confirmation(
