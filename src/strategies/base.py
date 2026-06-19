@@ -54,6 +54,8 @@ class StrategyContext:
         timeframe: ``"daily"`` or ``"weekly"``.
         prior_state: the *other* timeframe's most recent stored result, for the
             multi-timeframe cross-read (§7.3). ``None`` on cold start → neutral.
+        benchmark_close: the benchmark's (SPY) close series for the relative-strength
+            confirmation input (§7.1), aligned by date. ``None`` → RS abstains.
         config: the full loaded config, for anything else a strategy needs.
     """
 
@@ -61,6 +63,7 @@ class StrategyContext:
     params: dict[str, Any]
     timeframe: str
     prior_state: Any | None = None
+    benchmark_close: pd.Series | None = None
     config: Any | None = None
 
 

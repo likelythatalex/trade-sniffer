@@ -302,15 +302,24 @@ def _fetch_window(timeframe: str, config: Config, today: date) -> date:
 
 
 def _normalize_columns(raw: pd.DataFrame, ticker: str) -> pd.DataFrame:
-    """Rename yfinance's capitalized OHLCV to the internal lowercase schema.
+    """Rename yfinance's capitalized OHLCV to the internal lowercase schema and
+    normalize the index to tz-naive dates.
 
-    Decouples the pipeline from the data source's naming (so yfinance's column
-    casing never leaks downstream).
+    Decouples the pipeline from the data source's naming *and* from index quirks: the
+    two fetch paths return differently-typed indexes — ``Ticker.history`` is tz-aware
+    (America/New_York) while ``yf.download`` is tz-naive — which otherwise wouldn't
+    align (e.g. a stock vs SPY for relative strength). Daily/weekly bars carry no
+    meaningful intraday time, so we strip the tz and time down to the date.
     """
     missing = [col for col in _COLUMN_MAP if col not in raw.columns]
     if missing:
         raise DataError(f"{ticker}: data missing expected column(s) {missing}.")
-    return raw.rename(columns=_COLUMN_MAP)[_OHLCV].copy()
+    out = raw.rename(columns=_COLUMN_MAP)[_OHLCV].copy()
+    if isinstance(out.index, pd.DatetimeIndex):
+        if out.index.tz is not None:
+            out.index = out.index.tz_localize(None)
+        out.index = out.index.normalize()
+    return out
 
 
 def _resolve_exchange(metadata: dict[str, Any], ticker: str, overrides: dict[str, str]) -> str | None:

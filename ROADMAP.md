@@ -40,7 +40,7 @@ Detail/status per concept lives in `appendix.md`; definitions in `wyckoff_method
 
 | Item | Status | Detail |
 |---|---|---|
-| **RS-vs-SPY confirmation** | TODO | SPY is already fetched & gate-exempt. Feed the `confirmation` sub-score. SPEC §7.1; appendix "Relative Strength vs. SPY" (PLANNED). |
+| **RS-vs-SPY confirmation** | DONE | SPY batch-fetched per timeframe (`scanner._benchmark_close`), passed via `StrategyContext.benchmark_close`; `wyckoff._relative_strength` scores stock-minus-SPY return over `trend_lookback`, logged as `rs_vs_spy`. Fixed a tz-index mismatch between the two fetch paths in `_normalize_columns`. SPEC §7.1. |
 | **Volatility contraction ("the coil")** | TODO | BB-width / ATR contraction inside the range. SPEC §7.2; appendix "Volatility Contraction" (PLANNED). |
 | **Complete spring/upthrust** | TODO | Apply `spring_wick_pct` + richer volume corroboration (today: break + snapback only). SPEC §6.3; appendix "Spring / Upthrust" (PARTIAL). |
 | **Climax reaction check** | TODO | Add the reversal/reaction confirmation; today it's a volume-expansion proxy only. SPEC §6.2; appendix "Climax" (PARTIAL); methodology §2.3. |

@@ -144,15 +144,49 @@ def test_detect_upthrust() -> None:
 def test_confirmation_positive_after_downtrend() -> None:
     closes = [float(c) for c in range(120, 99, -2)]  # 120 -> 100
     df = bars([c + 1 for c in closes], [c - 1 for c in closes], closes, closes, [100.0] * len(closes))
-    score, _ = score_confirmation(df, None, {}, make_params(trend_lookback=10))
+    score, _, breakdown = score_confirmation(df, None, {}, make_params(trend_lookback=10))
     assert score > 0
+    assert breakdown["trend"] > 0
 
 
 def test_confirmation_negative_after_uptrend() -> None:
     closes = [float(c) for c in range(100, 121, 2)]  # 100 -> 120
     df = bars([c + 1 for c in closes], [c - 1 for c in closes], closes, closes, [100.0] * len(closes))
-    score, _ = score_confirmation(df, None, {}, make_params(trend_lookback=10))
+    score, _, breakdown = score_confirmation(df, None, {}, make_params(trend_lookback=10))
     assert score < 0
+    assert breakdown["trend"] < 0
+
+
+# --- score_confirmation (RS vs SPY) ------------------------------------------
+
+
+def _flat_base(length: int = 12) -> pd.DataFrame:
+    closes = [100.0] * length  # flat -> trend contributes 0, isolates the RS input
+    return bars([101.0] * length, [99.0] * length, closes, closes, [100.0] * length)
+
+
+def test_confirmation_rs_positive_when_outperforming_spy() -> None:
+    df = _flat_base()
+    spy = pd.Series([float(120 - i) for i in range(len(df))], index=df.index)  # SPY falling
+    _, reasons, breakdown = score_confirmation(
+        df, None, {}, make_params(trend_lookback=10), benchmark_close=spy
+    )
+    assert breakdown["rs"] > 0  # flat stock vs falling index = relative strength
+    assert "outperforming SPY (relative strength)" in reasons
+
+
+def test_confirmation_rs_negative_when_underperforming_spy() -> None:
+    df = _flat_base()
+    spy = pd.Series([float(90 + i) for i in range(len(df))], index=df.index)  # SPY rising
+    _, _, breakdown = score_confirmation(
+        df, None, {}, make_params(trend_lookback=10), benchmark_close=spy
+    )
+    assert breakdown["rs"] < 0  # flat stock vs rising index = relative weakness
+
+
+def test_confirmation_rs_abstains_without_benchmark() -> None:
+    _, _, breakdown = score_confirmation(_flat_base(), None, {}, make_params(trend_lookback=10))
+    assert breakdown["rs"] is None
 
 
 # --- evaluate (the M1 proof) --------------------------------------------------

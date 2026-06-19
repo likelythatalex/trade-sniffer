@@ -26,6 +26,7 @@ from .base import Strategy, StrategyContext, StrategyResult
 # Calibration seeds (could move to config later; kept here as the first-pass defaults).
 DIRECTION_FLOOR = 10.0  # |composite| below this -> direction "none"
 TREND_FULL_SCALE = 0.20  # net move over trend_lookback that maps to full trend conviction
+RS_FULL_SCALE = 0.10  # [TUNABLE] out/under-performance vs SPY over the lookback for full RS
 
 _SUB_SCORES = ("range_structure", "volume_behavior", "spring_upthrust", "confirmation")
 
@@ -52,8 +53,8 @@ class WyckoffStrategy(Strategy):
 
         volume_score, volume_reasons = score_volume_behavior(df, features, range_info, params)
         spring = detect_spring_upthrust(df, features, range_info, params)
-        confirmation_score, confirmation_reasons = score_confirmation(
-            df, features, range_info, params, context.prior_state
+        confirmation_score, confirmation_reasons, confirmation_breakdown = score_confirmation(
+            df, features, range_info, params, context.prior_state, context.benchmark_close
         )
 
         sub_scores = {
@@ -85,6 +86,7 @@ class WyckoffStrategy(Strategy):
                 "composite_signed": composite_signed,
                 "is_spring": spring["is_spring"],
                 "is_upthrust": spring["is_upthrust"],
+                "confirmation": confirmation_breakdown,  # per-input contributions, for logging
             },
         )
 
@@ -261,39 +263,78 @@ def score_confirmation(
     range_info: dict[str, Any],
     params: dict[str, Any],
     mtf_direction: str | None = None,
-) -> tuple[float, list[str]]:
-    """§7 confirmation (signed; mean of the firing inputs). Implements TREND CONTEXT
-    and MTF agreement (``mtf_direction`` = the other timeframe's stored direction, or
-    None = neutral/n-a). RS-vs-SPY and volatility contraction still abstain (need
-    data.py SPY / not yet wired) — partial by design."""
+    benchmark_close: pd.Series | None = None,
+) -> tuple[float, list[str], dict[str, float | None]]:
+    """§7 confirmation (signed; mean of the firing inputs). Implements TREND CONTEXT,
+    RS-vs-SPY, and MTF agreement. Returns ``(score, reasons, breakdown)`` where
+    ``breakdown`` holds each input's signed contribution (or ``None`` if it abstained),
+    so the scanner can log them to signals.csv. Volatility contraction still abstains
+    (next Tier-2 item)."""
     contributions: list[float] = []
     reasons: list[str] = []
+    breakdown: dict[str, float | None] = {"trend": None, "rs": None, "mtf": None}
 
     n = len(df)
+    lookback = min(int(params["trend_lookback"]), n - 1) if n >= 2 else 0
+
+    # Trend context: a prior downtrend (negative net move) favors accumulation.
     if n >= 2:
-        lookback = min(int(params["trend_lookback"]), n - 1)
         prior_close = float(df["close"].iloc[-1 - lookback])
         last_close = float(df["close"].iloc[-1])
         if prior_close > 0:
             pct_change = (last_close - prior_close) / prior_close
-            # Prior downtrend (pct_change < 0) favors accumulation -> positive.
             trend = _clip(-pct_change / TREND_FULL_SCALE, -1.0, 1.0) * 100.0
             contributions.append(trend)
+            breakdown["trend"] = trend
             if trend >= DIRECTION_FLOOR:
                 reasons.append("prior downtrend (accumulation context)")
             elif trend <= -DIRECTION_FLOOR:
                 reasons.append("prior uptrend (distribution context)")
 
+    # RS vs SPY (§7.1): out-performing the benchmark over the lookback is a bullish tell.
+    if benchmark_close is not None and n >= 2:
+        rs = _relative_strength(df, benchmark_close, lookback)
+        if rs is not None:
+            contributions.append(rs)
+            breakdown["rs"] = rs
+            if rs >= DIRECTION_FLOOR:
+                reasons.append("outperforming SPY (relative strength)")
+            elif rs <= -DIRECTION_FLOOR:
+                reasons.append("underperforming SPY (relative weakness)")
+
     # MTF agreement: the other timeframe's stored direction is directional evidence now.
     if mtf_direction == "accumulation":
         contributions.append(100.0)
+        breakdown["mtf"] = 100.0
         reasons.append("MTF: other timeframe in accumulation")
     elif mtf_direction == "distribution":
         contributions.append(-100.0)
+        breakdown["mtf"] = -100.0
         reasons.append("MTF: other timeframe in distribution")
 
     score = sum(contributions) / len(contributions) if contributions else 0.0
-    return score, reasons
+    return score, reasons, breakdown
+
+
+def _relative_strength(
+    df: pd.DataFrame, benchmark_close: pd.Series, lookback: int
+) -> float | None:
+    """Signed RS contribution: the stock's return minus the benchmark's over the same
+    ``lookback`` bars, scaled to [-100, +100] (+ = out-performance → accumulation bias).
+    The benchmark is aligned onto the stock's index (forward-filling minor gaps).
+    Returns ``None`` (abstain) when it can't be computed on a degenerate/short series."""
+    bench = benchmark_close.reindex(df.index).ffill()
+    if len(bench) <= lookback:
+        return None
+    bench_now = bench.iloc[-1]
+    bench_then = bench.iloc[-1 - lookback]
+    stock_now = float(df["close"].iloc[-1])
+    stock_then = float(df["close"].iloc[-1 - lookback])
+    if not (pd.notna(bench_now) and pd.notna(bench_then)) or bench_then <= 0 or stock_then <= 0:
+        return None
+    stock_return = (stock_now - stock_then) / stock_then
+    bench_return = (float(bench_now) - float(bench_then)) / float(bench_then)
+    return _clip((stock_return - bench_return) / RS_FULL_SCALE, -1.0, 1.0) * 100.0
 
 
 # --- small helpers ---

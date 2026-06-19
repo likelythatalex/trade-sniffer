@@ -74,9 +74,9 @@ version. Think of it as a README for the *domain*, not the code.
 - **How it's implemented here:** As *structural fingerprint detection + a conviction score*,
   **not** definitive phase labeling. See `docs/wyckoff_methodology.md`.
 - **Status:** `PARTIAL` (`strategies/wyckoff.py`, tested in `tests/test_wyckoff.py`).
-  First-pass scoring implemented (range/volume/spring + trend context); a valid range is a
-  precondition. Sub-score weights are calibration seeds, and the RS/MTF/volatility-contraction
-  confirmation inputs still abstain (need `data.py`/`state.py`).
+  First-pass scoring implemented (range/volume/spring + trend context + RS-vs-SPY + MTF); a
+  valid range is a precondition. Sub-score weights are calibration seeds; volatility
+  contraction is the one remaining confirmation input still abstaining.
 
 ### Accumulation / Distribution
 - **Plain meaning:** A trading range where informed money is building a position
@@ -150,9 +150,14 @@ version. Think of it as a README for the *domain*, not the code.
 ### Relative Strength vs. SPY (RS)
 - **Plain meaning:** A stock holding up better than the index on weak tape (or worse on
   strong tape) suggests informed positioning.
-- **How it's implemented here:** Confirmation input to the Wyckoff `confirmation` sub-score;
-  SPY always fetched, exempt from the liquidity gate.
-- **Status:** `PLANNED`.
+- **How it's implemented here:** SPY's close is batch-fetched once per timeframe
+  (`scanner._benchmark_close`, fail-soft → RS abstains) and passed into the strategy via
+  `StrategyContext.benchmark_close`. `wyckoff._relative_strength` scores the stock's return
+  minus SPY's over `trend_lookback` (scaled by `RS_FULL_SCALE`, a `[TUNABLE]` seed); out-
+  performance is a positive (accumulation) contribution to the `confirmation` sub-score and is
+  logged to `signals.csv` (`rs_vs_spy`). SPY is exempt from the liquidity gate.
+- **Status:** `IMPLEMENTED` (`scanner.py` + `strategies/wyckoff.py`, tested in
+  `tests/test_wyckoff.py` / `tests/test_scanner.py`).
 
 ### Volatility Contraction ("the coil")
 - **Plain meaning:** Narrowing range/volatility inside a consolidation often precedes the

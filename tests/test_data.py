@@ -65,6 +65,19 @@ def test_normalize_columns_raises_on_missing() -> None:
         _normalize_columns(pd.DataFrame({"Open": [1.0]}), "AAPL")
 
 
+def test_normalize_columns_makes_index_tz_naive_dates() -> None:
+    # A tz-aware intraday index (as Ticker.history returns) must come out tz-naive at
+    # midnight, so it aligns with the tz-naive yf.download path (needed for RS).
+    idx = pd.DatetimeIndex(["2024-06-03 16:00:00"]).tz_localize("America/New_York")
+    raw = pd.DataFrame(
+        {"Open": [1.0], "High": [2.0], "Low": [0.5], "Close": [1.5], "Volume": [100.0]},
+        index=idx,
+    )
+    out = _normalize_columns(raw, "AAPL")
+    assert out.index.tz is None
+    assert out.index[0] == pd.Timestamp("2024-06-03")
+
+
 def test_resolve_exchange_override_wins() -> None:
     metadata = {"fullExchangeName": "NasdaqGS"}
     assert _resolve_exchange(metadata, "AAPL", {"AAPL": "NASDAQ"}) == "NASDAQ"

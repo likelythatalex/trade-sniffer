@@ -7,8 +7,9 @@ bad ticker is logged and skipped, never aborts the run.
 
 State + notifications are wired (M4): prior-run state drives dedup transitions and
 the MTF cross-read (the other timeframe's stored direction nudges confirmation), and
-Discord fires on NEW/FAILED only (suppressed when empty). Still abstaining: RS-vs-SPY
-and volatility-contraction confirmation inputs (SPY not fetched yet).
+Discord fires on NEW/FAILED only (suppressed when empty). RS-vs-SPY is wired (SPY is
+batch-fetched once per timeframe and passed into the strategy); volatility contraction
+is the remaining abstaining confirmation input.
 
 Run from the repo root::
 
@@ -29,7 +30,7 @@ import pandas as pd
 
 from .combiner import combine
 from .config import Config, load_config, resolve_wyckoff_params
-from .data import fetch_many, resolve_exchange
+from .data import fetch_many, fetch_spy, resolve_exchange
 from .data_quality import QualityReport, clean
 from .features import compute_features
 from .notify import has_transitions, make_notifier
@@ -90,6 +91,7 @@ def run_timeframe(
     # Batch-fetch the whole universe up front (one threaded call, far faster at scale);
     # a ticker that returned no data is simply absent and gets skipped below.
     fetched_all = fetch_many(universe, timeframe, config, today=today)
+    benchmark = _benchmark_close(timeframe, config, today)  # SPY for RS; None -> RS abstains
 
     for ticker in universe:
         counts["scanned"] += 1
@@ -116,7 +118,7 @@ def run_timeframe(
             other_direction = mtf_direction(state, other_timeframe, ticker)  # None on cold start
             context = StrategyContext(
                 features=features, params=params, timeframe=timeframe,
-                prior_state=other_direction, config=config,
+                prior_state=other_direction, benchmark_close=benchmark, config=config,
             )
             results = {name: strat.evaluate(cleaned, context) for name, strat in strategies.items()}
             composite = combine(results, weights)
@@ -179,6 +181,17 @@ def main(argv: list[str] | None = None) -> None:
 
 
 # --- helpers ------------------------------------------------------------------
+
+
+def _benchmark_close(timeframe: str, config: Config, today: date | None) -> pd.Series | None:
+    """SPY close series for the RS-vs-SPY confirmation input (§7.1). Fetched once per
+    timeframe. A missing benchmark must never abort the run, so failures → ``None``
+    (RS simply abstains for the whole run)."""
+    try:
+        return fetch_spy(timeframe, config, today=today)["close"]
+    except Exception:
+        logger.warning("benchmark (SPY) fetch failed; RS-vs-SPY abstains this run")
+        return None
 
 
 def _card(ticker: str, exchange: str | None, composite: StrategyResult) -> dict[str, Any]:
@@ -250,6 +263,7 @@ def _signals_row(
     """
     last = features.iloc[-1] if len(features) else None
     sub = wyckoff.sub_scores if wyckoff else {}
+    conf = wyckoff.metadata.get("confirmation", {}) if wyckoff else {}
     return {
         "run_ts": run_ts,
         "ticker": ticker,
@@ -261,10 +275,10 @@ def _signals_row(
         "volume_score": _round(sub.get("volume_behavior")),
         "spring_score": _round(sub.get("spring_upthrust")),
         "confirmation_score": _round(sub.get("confirmation")),
-        "rs_vs_spy": "",  # abstains until data.py SPY + RS scoring land
-        "vol_contraction": "",  # abstains
+        "rs_vs_spy": _round(conf.get("rs")),  # signed RS contribution, or "" if it abstained
+        "vol_contraction": "",  # abstains (next Tier-2 item)
         "mtf_agree": _mtf_agree(mtf_direction, composite.direction),
-        "trend_context": _round(sub.get("confirmation")),  # confirmation = trend + MTF
+        "trend_context": _round(conf.get("trend")),
         "data_quality_flag": "; ".join(quality.repairs),
         "feat_volume_ratio": _feat(last, "volume_ratio"),
         "feat_volume_pctile": _feat(last, "volume_pctile"),

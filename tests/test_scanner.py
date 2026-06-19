@@ -6,6 +6,7 @@ asserting the pipeline produces a report + signals.csv and counts correctly.
 """
 from __future__ import annotations
 
+import csv
 import dataclasses
 from datetime import date
 from pathlib import Path
@@ -58,9 +59,11 @@ def test_card_shape() -> None:
 
 
 def _patch_fetch(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, FetchResult]) -> None:
-    """Stub the batch fetch + lazy exchange resolution so run_timeframe stays hermetic."""
+    """Stub the batch fetch, lazy exchange, and SPY benchmark so run_timeframe stays
+    hermetic. Benchmark defaults to None (RS abstains) → existing scores unchanged."""
     monkeypatch.setattr(scanner, "fetch_many", lambda tickers, tf, c, today=None: mapping)
     monkeypatch.setattr(scanner, "resolve_exchange", lambda _t, _c: "NYSE")
+    monkeypatch.setattr(scanner, "_benchmark_close", lambda _tf, _c, _today: None)
 
 
 def test_run_timeframe_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -108,6 +111,23 @@ def test_run_timeframe_fail_soft_on_eval_error(tmp_path: Path, monkeypatch: pyte
     assert counts["scanned"] == 1 and counts["errored"] == 1
 
 
+def test_run_timeframe_logs_rs_when_benchmark_present(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # With a benchmark wired in, the RS contribution is logged to signals.csv (not "").
+    cfg = config_for(tmp_path)
+    stock = accumulation_df()
+    fetch_result = FetchResult(df=stock, exchange=None, corporate_actions=pd.Series(dtype=float))
+    monkeypatch.setattr(scanner, "load_universe", lambda _path: ["XOM"])
+    monkeypatch.setattr(scanner, "fetch_many", lambda tickers, tf, c, today=None: {"XOM": fetch_result})
+    monkeypatch.setattr(scanner, "resolve_exchange", lambda _t, _c: "NYSE")
+    spy = pd.Series([float(120 - i) for i in range(len(stock))], index=stock.index)  # falling SPY
+    monkeypatch.setattr(scanner, "_benchmark_close", lambda _tf, _c, _today: spy)
+
+    scanner.run_timeframe("daily", cfg, today=date(2024, 6, 1))
+
+    rows = list(csv.DictReader((Path(cfg.output.dir) / "signals.csv").read_text(encoding="utf-8").splitlines()))
+    assert rows[-1]["rs_vs_spy"] != ""  # RS contribution recorded for the evaluated bar
+
+
 def test_run_timeframe_uses_explicit_tickers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = config_for(tmp_path)
     fetch_result = FetchResult(df=accumulation_df(), exchange=None, corporate_actions=pd.Series(dtype=float))
@@ -124,6 +144,7 @@ def test_run_timeframe_uses_explicit_tickers(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setattr(scanner, "load_universe", fail_universe)
     monkeypatch.setattr(scanner, "fetch_many", fake_fetch_many)
     monkeypatch.setattr(scanner, "resolve_exchange", lambda _t, _c: "NYSE")
+    monkeypatch.setattr(scanner, "_benchmark_close", lambda _tf, _c, _today: None)
 
     counts = scanner.run_timeframe("daily", cfg, today=date(2024, 6, 1), tickers=["COIN", "PLTR"])
     assert seen == ["COIN", "PLTR"]
