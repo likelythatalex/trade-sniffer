@@ -21,6 +21,7 @@ from src.strategies.wyckoff import (
     detect_spring_upthrust,
     detect_trading_range,
     score_confirmation,
+    score_vol_contraction,
 )
 
 
@@ -40,6 +41,7 @@ def make_params(**overrides) -> dict:
         spring_snapback_bars=3,
         spring_wick_pct=50,
         trend_lookback=15,
+        vol_contraction_window=5,
         sub_weights={
             "range_structure": 25,
             "volume_behavior": 35,
@@ -187,6 +189,41 @@ def test_confirmation_rs_negative_when_underperforming_spy() -> None:
 def test_confirmation_rs_abstains_without_benchmark() -> None:
     _, _, breakdown = score_confirmation(_flat_base(), None, {}, make_params(trend_lookback=10))
     assert breakdown["rs"] is None
+
+
+# --- score_vol_contraction (the coil) ----------------------------------------
+
+
+def _coil_df() -> pd.DataFrame:
+    # Earlier bars wide (range 10), recent bars tight (range 2) -> contracting volatility.
+    highs = [110.0] * 10 + [103.0] * 5
+    lows = [100.0] * 10 + [101.0] * 5
+    closes = [105.0] * 10 + [102.0] * 5
+    return bars(highs, lows, closes, closes, [100.0] * 15)
+
+
+def _coil_params() -> dict:
+    return make_params(range_lookback=15, vol_contraction_window=5)
+
+
+def test_vol_contraction_bullish_coil_near_support() -> None:
+    score = score_vol_contraction(_coil_df(), {"near_support": True, "near_resistance": False}, _coil_params())
+    assert score is not None and score > 0
+
+
+def test_vol_contraction_bearish_coil_near_resistance() -> None:
+    score = score_vol_contraction(_coil_df(), {"near_support": False, "near_resistance": True}, _coil_params())
+    assert score is not None and score < 0
+
+
+def test_vol_contraction_abstains_mid_range() -> None:
+    assert score_vol_contraction(_coil_df(), {"near_support": False, "near_resistance": False}, _coil_params()) is None
+
+
+def test_vol_contraction_abstains_when_expanding() -> None:
+    # Recent ranges WIDER than earlier -> not a coil -> abstain even near an extreme.
+    df = bars([103.0] * 10 + [110.0] * 5, [101.0] * 10 + [100.0] * 5, [102.0] * 15, [102.0] * 15, [100.0] * 15)
+    assert score_vol_contraction(df, {"near_support": True, "near_resistance": False}, _coil_params()) is None
 
 
 # --- evaluate (the M1 proof) --------------------------------------------------

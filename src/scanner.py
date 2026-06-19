@@ -276,7 +276,7 @@ def _signals_row(
         "spring_score": _round(sub.get("spring_upthrust")),
         "confirmation_score": _round(sub.get("confirmation")),
         "rs_vs_spy": _round(conf.get("rs")),  # signed RS contribution, or "" if it abstained
-        "vol_contraction": "",  # abstains (next Tier-2 item)
+        "vol_contraction": _round(conf.get("vol_contraction")),
         "mtf_agree": _mtf_agree(mtf_direction, composite.direction),
         "trend_context": _round(conf.get("trend")),
         "data_quality_flag": "; ".join(quality.repairs),

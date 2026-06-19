@@ -27,6 +27,7 @@ from .base import Strategy, StrategyContext, StrategyResult
 DIRECTION_FLOOR = 10.0  # |composite| below this -> direction "none"
 TREND_FULL_SCALE = 0.20  # net move over trend_lookback that maps to full trend conviction
 RS_FULL_SCALE = 0.10  # [TUNABLE] out/under-performance vs SPY over the lookback for full RS
+CONTRACTION_FULL_SCALE = 0.5  # [TUNABLE] recent vol this fraction below earlier vol = full coil
 
 _SUB_SCORES = ("range_structure", "volume_behavior", "spring_upthrust", "confirmation")
 
@@ -272,7 +273,7 @@ def score_confirmation(
     (next Tier-2 item)."""
     contributions: list[float] = []
     reasons: list[str] = []
-    breakdown: dict[str, float | None] = {"trend": None, "rs": None, "mtf": None}
+    breakdown: dict[str, float | None] = {"trend": None, "rs": None, "vol_contraction": None, "mtf": None}
 
     n = len(df)
     lookback = min(int(params["trend_lookback"]), n - 1) if n >= 2 else 0
@@ -301,6 +302,16 @@ def score_confirmation(
                 reasons.append("outperforming SPY (relative strength)")
             elif rs <= -DIRECTION_FLOOR:
                 reasons.append("underperforming SPY (relative weakness)")
+
+    # Volatility contraction (§7.2): a coil tightening near an extreme precedes the move.
+    vol_contraction = score_vol_contraction(df, range_info, params)
+    if vol_contraction is not None:
+        contributions.append(vol_contraction)
+        breakdown["vol_contraction"] = vol_contraction
+        if vol_contraction >= DIRECTION_FLOOR:
+            reasons.append("volatility contraction near support (coil)")
+        elif vol_contraction <= -DIRECTION_FLOOR:
+            reasons.append("volatility contraction near resistance (coil)")
 
     # MTF agreement: the other timeframe's stored direction is directional evidence now.
     if mtf_direction == "accumulation":
@@ -335,6 +346,35 @@ def _relative_strength(
     stock_return = (stock_now - stock_then) / stock_then
     bench_return = (float(bench_now) - float(bench_then)) / float(bench_then)
     return _clip((stock_return - bench_return) / RS_FULL_SCALE, -1.0, 1.0) * 100.0
+
+
+def score_vol_contraction(
+    df: pd.DataFrame, range_info: dict[str, Any], params: dict[str, Any]
+) -> float | None:
+    """§7.2 volatility contraction ("the coil"): recent bar ranges tightening vs earlier
+    in the trading range often precedes the expansion move. It's directionless on its own,
+    so direction comes from range location — reusing the single near-support/resistance
+    definition: a coil near support is a bullish (accumulation) coil, near resistance a
+    bearish one. Returns a signed contribution, or ``None`` (abstain) when mid-range, when
+    volatility isn't contracting, or when it can't be measured."""
+    near_support = range_info.get("near_support", False)
+    near_resistance = range_info.get("near_resistance", False)
+    if not (near_support or near_resistance):
+        return None  # no directional read mid-range
+    range_n = min(int(params["range_lookback"]), len(df))
+    recent_n = min(int(params["vol_contraction_window"]), range_n)
+    if range_n - recent_n < 1:
+        return None  # need an earlier portion to compare against
+    spread = (df["high"] - df["low"]).to_numpy(dtype=float)[-range_n:]
+    recent_vol = spread[-recent_n:].mean()
+    earlier_vol = spread[:-recent_n].mean()
+    if not (earlier_vol > 0) or pd.isna(recent_vol) or pd.isna(earlier_vol):
+        return None
+    contraction = 1.0 - (recent_vol / earlier_vol)  # > 0 means recent is tighter
+    if contraction <= 0:
+        return None  # expanding or flat → not a coil
+    magnitude = _clip01(contraction / CONTRACTION_FULL_SCALE) * 100.0
+    return magnitude if near_support else -magnitude
 
 
 # --- small helpers ---

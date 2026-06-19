@@ -74,9 +74,9 @@ version. Think of it as a README for the *domain*, not the code.
 - **How it's implemented here:** As *structural fingerprint detection + a conviction score*,
   **not** definitive phase labeling. See `docs/wyckoff_methodology.md`.
 - **Status:** `PARTIAL` (`strategies/wyckoff.py`, tested in `tests/test_wyckoff.py`).
-  First-pass scoring implemented (range/volume/spring + trend context + RS-vs-SPY + MTF); a
-  valid range is a precondition. Sub-score weights are calibration seeds; volatility
-  contraction is the one remaining confirmation input still abstaining.
+  First-pass scoring implemented (range/volume/spring + all four confirmation inputs: trend
+  context, RS-vs-SPY, volatility contraction, MTF); a valid range is a precondition. Sub-score
+  weights and per-signal thresholds remain calibration seeds.
 
 ### Accumulation / Distribution
 - **Plain meaning:** A trading range where informed money is building a position
@@ -162,9 +162,12 @@ version. Think of it as a README for the *domain*, not the code.
 ### Volatility Contraction ("the coil")
 - **Plain meaning:** Narrowing range/volatility inside a consolidation often precedes the
   expansion move.
-- **How it's implemented here:** Bollinger Band width or ATR contraction as a confirmation
-  input.
-- **Status:** `PLANNED`.
+- **How it's implemented here:** `wyckoff.score_vol_contraction` compares mean bar range over
+  the recent `vol_contraction_window` bars vs the earlier part of the trading range; a tighter
+  recent window is a coil. Directionless on its own, so direction comes from range location
+  (the single near-support/resistance definition): a coil near support is bullish, near
+  resistance bearish. Feeds the `confirmation` sub-score; logged as `vol_contraction`.
+- **Status:** `IMPLEMENTED` (`strategies/wyckoff.py`, tested in `tests/test_wyckoff.py`).
 
 ### Multi-Timeframe (MTF) Agreement
 - **Plain meaning:** A setup confirmed on two timeframes is more reliable than on one.

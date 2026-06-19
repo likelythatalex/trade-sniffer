@@ -75,11 +75,15 @@ wyckoff:
     spring_snapback_bars: 3     # [TUNABLE/VERIFY] max bars to close back inside the range
     # P5: simple v1 trend-context measure (the harmonic rule is [FUTURE], see methodology §4).
     trend_lookback: 60          # [TUNABLE] bars for prior up/down-trend (price vs. N-period MA / net change)
+    # §7.2 volatility contraction ("the coil"): recent bar ranges vs earlier in the range.
+    # A count INSIDE range_lookback (like min_range_bars), so not a depth-lookback param.
+    vol_contraction_window: 10  # [TUNABLE] recent bars compared against the earlier range
   per_timeframe:
     daily: {}                   # uses defaults as-is
     weekly:                     # tune for weekly bars (values below are starting points)
       range_lookback: 26        # ~6 months of weekly bars, not 60 weeks
       min_range_bars: 8
+      vol_contraction_window: 6 # fewer weekly bars in the coil window
       # any VSA threshold above (high_volume_ratio, narrow_spread_atr, …) may also be
       # overridden here for weekly; left at defaults until calibration says otherwise.
   # internal sub-score weights for THIS strategy's own composite (timeframe-independent)
