@@ -1,33 +1,29 @@
 {
   "daily": {
-    "run_ts": "2026-06-18T23:43:24+00:00",
+    "run_ts": "2026-06-19T22:55:03+00:00",
     "qualifying": {
       "BKR": {
-        "score": 85.02,
+        "score": 71.18,
         "direction": "accumulation"
       },
-      "CME": {
-        "score": 74.73,
+      "DVN": {
+        "score": 73.61,
         "direction": "accumulation"
       },
-      "COP": {
-        "score": 74.06,
-        "direction": "accumulation"
-      },
-      "CVX": {
-        "score": 72.66,
-        "direction": "accumulation"
-      },
-      "GL": {
-        "score": 76.05,
+      "EXR": {
+        "score": 72.81,
         "direction": "distribution"
       },
-      "HSY": {
-        "score": 76.58,
-        "direction": "accumulation"
+      "LYV": {
+        "score": 77.28,
+        "direction": "distribution"
       },
-      "TROW": {
-        "score": 70.02,
+      "TRV": {
+        "score": 82.49,
+        "direction": "distribution"
+      },
+      "VRTX": {
+        "score": 71.15,
         "direction": "distribution"
       }
     }
