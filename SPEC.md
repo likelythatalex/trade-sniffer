@@ -595,6 +595,11 @@ holds the prior run's qualifying set per timeframe):
 
 ## 12. Future phases (explicitly out of scope now, architected for)
 
+> **Prioritization, sequencing, and status live in `ROADMAP.md`** (the single source of
+> truth for the backlog), as do small near-term operational todos that don't need a design
+> entry. This section is the *design rationale* for the larger future items; ROADMAP links
+> back here rather than repeating the "why".
+
 - **Additional strategies** (momentum regime, relative strength, volatility) implementing
   the §6 `Strategy` interface — each a new file in `strategies/` + a config line.
 - **Telegram notification channel** behind the §8.3 `notify.py` interface (adds

@@ -27,6 +27,9 @@ version. Think of it as a README for the *domain*, not the code.
   `IMPLEMENTED` but points at code that doesn't exist is worse than no entry.
 - **When you add a new concept** (even one not built yet), add it as `PLANNED` so the intent
   is captured.
+- **This doc tracks *concept* status, not the work backlog.** What to build next and in what
+  order lives in `ROADMAP.md` (the single source of truth for prioritization); keep the two
+  in sync when an item lands.
 
 ### Status tags
 | Tag | Meaning |

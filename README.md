@@ -7,7 +7,8 @@ watchlist is written, and a link is pushed to **Discord**. It **finds and flags 
 human review — it never places trades.**
 
 Design details live in [SPEC.md](SPEC.md); working agreements in [CLAUDE.md](CLAUDE.md); domain
-concepts + implementation status in [docs/appendix.md](docs/appendix.md).
+concepts + implementation status in [docs/appendix.md](docs/appendix.md); what's next + the
+prioritized backlog in [ROADMAP.md](ROADMAP.md).
 
 ## Setup
 
