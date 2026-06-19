@@ -1,8 +1,8 @@
 """Tests for the scanner orchestrator (SPEC §3, §10).
 
 The row/card mappers are unit-tested precisely. run_timeframe is tested end-to-end
-with data.fetch_ohlcv + load_universe monkeypatched (no network), asserting the
-pipeline produces a report + signals.csv and counts correctly.
+with data.fetch_many + resolve_exchange + load_universe monkeypatched (no network),
+asserting the pipeline produces a report + signals.csv and counts correctly.
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import pytest
 
 from src import config as config_module
 from src import scanner
-from src.data import DataError, FetchResult
+from src.data import FetchResult
 from src.strategies.base import StrategyResult
 from tests.test_wyckoff import accumulation_df
 
@@ -57,50 +57,73 @@ def test_card_shape() -> None:
     }
 
 
+def _patch_fetch(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, FetchResult]) -> None:
+    """Stub the batch fetch + lazy exchange resolution so run_timeframe stays hermetic."""
+    monkeypatch.setattr(scanner, "fetch_many", lambda tickers, tf, c, today=None: mapping)
+    monkeypatch.setattr(scanner, "resolve_exchange", lambda _t, _c: "NYSE")
+
+
 def test_run_timeframe_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = config_for(tmp_path)
-    fetch_result = FetchResult(df=accumulation_df(), exchange="NYSE", corporate_actions=pd.Series(dtype=float))
+    fetch_result = FetchResult(df=accumulation_df(), exchange=None, corporate_actions=pd.Series(dtype=float))
     monkeypatch.setattr(scanner, "load_universe", lambda _path: ["XOM"])
-    monkeypatch.setattr(scanner, "fetch_ohlcv", lambda t, tf, c, today=None: fetch_result)
+    _patch_fetch(monkeypatch, {"XOM": fetch_result})
 
     counts = scanner.run_timeframe("daily", cfg, today=date(2024, 6, 1))
 
     assert counts["scanned"] == 1
     assert (Path(cfg.output.dir) / "report_daily_2024-06-01.html").exists()
+    assert (Path(cfg.output.dir) / "index.html").exists()  # landing page written
     signals = Path(cfg.output.dir) / "signals.csv"
     assert signals.exists()
     lines = signals.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 2  # header + the one evaluated ticker
 
 
-def test_run_timeframe_fail_soft_on_data_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_timeframe_skips_ticker_with_no_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A ticker the batch returned nothing for is absent from the result -> skipped, no crash.
     cfg = config_for(tmp_path)
-
-    def boom(*_args, **_kwargs):
-        raise DataError("delisted")
-
     monkeypatch.setattr(scanner, "load_universe", lambda _path: ["BAD"])
-    monkeypatch.setattr(scanner, "fetch_ohlcv", boom)
+    _patch_fetch(monkeypatch, {})
 
     counts = scanner.run_timeframe("daily", cfg, today=date(2024, 6, 1))
-    assert counts["scanned"] == 1 and counts["skipped"] == 1  # logged + skipped, no crash
+    assert counts["scanned"] == 1 and counts["skipped"] == 1
+
+
+def test_run_timeframe_fail_soft_on_eval_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # An exception while evaluating one ticker is caught (errored), never aborts the run.
+    cfg = config_for(tmp_path)
+    fetch_result = FetchResult(df=accumulation_df(), exchange=None, corporate_actions=pd.Series(dtype=float))
+    monkeypatch.setattr(scanner, "load_universe", lambda _path: ["XOM"])
+    _patch_fetch(monkeypatch, {"XOM": fetch_result})
+
+    class _BoomStrategy:
+        name = "wyckoff"
+
+        def evaluate(self, df, context):
+            raise ValueError("kaboom")
+
+    monkeypatch.setattr(scanner, "get_strategy", lambda _name: _BoomStrategy())
+    counts = scanner.run_timeframe("daily", cfg, today=date(2024, 6, 1))
+    assert counts["scanned"] == 1 and counts["errored"] == 1
 
 
 def test_run_timeframe_uses_explicit_tickers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = config_for(tmp_path)
-    fetch_result = FetchResult(df=accumulation_df(), exchange="NYSE", corporate_actions=pd.Series(dtype=float))
+    fetch_result = FetchResult(df=accumulation_df(), exchange=None, corporate_actions=pd.Series(dtype=float))
     seen: list[str] = []
 
-    def fake_fetch(ticker, tf, c, today=None):
-        seen.append(ticker)
-        return fetch_result
+    def fake_fetch_many(tickers, tf, c, today=None):
+        seen.extend(tickers)
+        return {ticker: fetch_result for ticker in tickers}
 
     # load_universe must NOT be consulted when explicit tickers are given.
     def fail_universe(_path):
         raise AssertionError("load_universe should not be called in on-demand mode")
 
     monkeypatch.setattr(scanner, "load_universe", fail_universe)
-    monkeypatch.setattr(scanner, "fetch_ohlcv", fake_fetch)
+    monkeypatch.setattr(scanner, "fetch_many", fake_fetch_many)
+    monkeypatch.setattr(scanner, "resolve_exchange", lambda _t, _c: "NYSE")
 
     counts = scanner.run_timeframe("daily", cfg, today=date(2024, 6, 1), tickers=["COIN", "PLTR"])
     assert seen == ["COIN", "PLTR"]
@@ -111,9 +134,9 @@ def test_no_liquidity_gate_keeps_thin_names(tmp_path: Path, monkeypatch: pytest.
     # Real liquidity floor would skip this low-$-volume fixture; the bypass keeps it.
     out = dataclasses.replace(CONFIG.output, dir=str(tmp_path))
     cfg = dataclasses.replace(CONFIG, output=out)  # real liquidity floor in force
-    fetch_result = FetchResult(df=accumulation_df(), exchange="NYSE", corporate_actions=pd.Series(dtype=float))
+    fetch_result = FetchResult(df=accumulation_df(), exchange=None, corporate_actions=pd.Series(dtype=float))
     monkeypatch.setattr(scanner, "load_universe", lambda _p: ["THIN"])
-    monkeypatch.setattr(scanner, "fetch_ohlcv", lambda t, tf, c, today=None: fetch_result)
+    _patch_fetch(monkeypatch, {"THIN": fetch_result})
 
     gated = scanner.run_timeframe("daily", cfg, today=date(2024, 6, 1), apply_liquidity_gate=True)
     assert gated["skipped"] == 1  # skipped by the gate
@@ -131,9 +154,9 @@ class _StubStrategy:
 
 def test_dedup_transitions_and_state_across_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = config_for(tmp_path)  # liquidity floor removed; threshold 70 (stub scores 80 -> flags)
-    fetch_result = FetchResult(df=accumulation_df(), exchange="NYSE", corporate_actions=pd.Series(dtype=float))
+    fetch_result = FetchResult(df=accumulation_df(), exchange=None, corporate_actions=pd.Series(dtype=float))
     monkeypatch.setattr(scanner, "load_universe", lambda _p: ["XOM"])
-    monkeypatch.setattr(scanner, "fetch_ohlcv", lambda t, tf, c, today=None: fetch_result)
+    _patch_fetch(monkeypatch, {"XOM": fetch_result})
     monkeypatch.setattr(scanner, "get_strategy", lambda name: _StubStrategy())
 
     signals = Path(cfg.output.dir) / "signals.csv"

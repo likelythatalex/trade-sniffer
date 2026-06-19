@@ -80,6 +80,14 @@ def test_write_tv_import_file(tmp_path: Path) -> None:
     assert "NYSE:XOM" in text and "NASDAQ:AAPL" in text and "NYSE:KO" in text
 
 
+def test_write_index_page_links_both_timeframes(tmp_path: Path) -> None:
+    path = report.write_index_page(config_with_output(tmp_path))
+    assert path.name == "index.html"
+    html = path.read_text(encoding="utf-8")
+    assert 'href="latest_daily.html"' in html
+    assert 'href="latest_weekly.html"' in html
+
+
 def test_render_dashboard_writes_files_with_required_content(tmp_path: Path) -> None:
     cfg = config_with_output(tmp_path)
     summary = {"scanned": 10, "flagged": 3, "skipped": 1, "errored": 0}

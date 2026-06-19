@@ -205,9 +205,12 @@ version. Think of it as a README for the *domain*, not the code.
 ### Lookahead Bias
 - **Plain meaning:** Accidentally using information not available at decision time, making
   results unrealistically good.
-- **How it's implemented here:** Only closed bars are evaluated; an acceptance test asserts
-  bar-N evaluation is unchanged by appending bar N+1.
-- **Status:** `PLANNED` (guard + test).
+- **How it's implemented here:** Only closed bars reach evaluation — `data._drop_incomplete_last_bar`
+  drops a trailing in-session/in-week bar on off-schedule runs (`_last_bar_is_incomplete`,
+  conservative 21:00-UTC close cutoff so no tzdata dependency). Scheduled runs are post-close,
+  so it's a no-op there.
+- **Status:** `PARTIAL` (`data.py`, tested in `tests/test_data.py`): fetch-level guard done;
+  the strategy-level acceptance test (bar-N unchanged by appending bar N+1, SPEC §11) still TODO.
 
 ### Dark Pool / Off-Exchange Prints
 - **Plain meaning:** Large trades executed away from public exchanges, reported after the
@@ -238,7 +241,9 @@ version. Think of it as a README for the *domain*, not the code.
   affects history depth and accuracy.
 - **How it's implemented here:** Weekly fetched natively (`interval='1wk'`, `auto_adjust=True`)
   in `data.fetch_ohlcv` to avoid resampling artifacts and history-depth math problems; fetch
-  window covers `required_history`; results cached per ticker+timeframe+date.
+  window covers `required_history`; results cached per ticker+timeframe+date. At universe
+  scale the scanner uses `data.fetch_many` (one threaded `yf.download` batch, OHLCV + splits)
+  instead of per-ticker calls, for speed; cache hits skip the network.
 - **Status:** `IMPLEMENTED` (`data.py`, pure helpers tested in `tests/test_data.py`; live
   fetch verified manually). SPY is always fetched (gate-exempt).
 
@@ -258,7 +263,8 @@ version. Think of it as a README for the *domain*, not the code.
 - **How it's implemented here:** `report.render_dashboard` renders a single-file HTML report
   per timeframe (Jinja2 template) with **lazy-loaded** free TradingView embed widgets
   (attribution kept), accumulation/distribution sections ranked by score; plus
-  `write_tv_import_file` (secondary `.txt`) and `append_signals` (schema-stable log).
+  `write_tv_import_file` (secondary `.txt`), `write_index_page` (a small `index.html` landing
+  page so the bare Pages URL resolves), and `append_signals` (schema-stable log).
 - **Status:** `IMPLEMENTED` (`report.py`, tested in `tests/test_report.py`); wired
   end-to-end by `scanner.py`. CI publishes output to the **gh-pages** branch (GitHub Pages),
   so `main` stays code-only and the dashboard is viewable at

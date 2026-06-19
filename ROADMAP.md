@@ -28,9 +28,9 @@ elsewhere, so their detail lives here.
 
 | Item | Status | Notes / detail |
 |---|---|---|
-| **Batch fetching** (`yf.download` multi-symbol) | TODO | The 516-ticker run is ~5 min one-by-one; batching cuts runtime and throttle risk as the universe grows. Change in `data.py`; keep per-ticker fail-soft behaviour. |
-| **Drop the partial in-session bar** | TODO | Running *during* market hours currently includes today's incomplete bar. Guard in `data.py` to drop the last bar if the session is still open → off-schedule runs stay strictly no-lookahead. Completes the "Lookahead Bias" guard (`appendix.md`, currently PLANNED) + add the bar-N/bar-N+1 test (SPEC §11). |
-| **`index.html` landing page on gh-pages** | TODO | The bare Pages URL (`/`) 404s today; add a small page linking `latest_daily.html` + `latest_weekly.html`. Write to `output/` so it publishes with the rest. |
+| **Batch fetching** (`yf.download` multi-symbol) | DONE | `data.fetch_many` does one threaded batch (OHLCV + splits via `actions=True`); cache hits skip the network, misses are downloaded. Exchange is now resolved lazily (`resolve_exchange`) only for flagged tickers, not all 516. |
+| **Drop the partial in-session bar** | DONE | `data._drop_incomplete_last_bar` drops the trailing bar when its period hasn't closed (conservative 21:00-UTC cutoff, no tzdata dep). Off-schedule runs stay no-lookahead. Strategy-level bar-N/bar-N+1 acceptance test (SPEC §11) still pending → see "Lookahead Bias" in `appendix.md`. |
+| **`index.html` landing page on gh-pages** | DONE | `report.write_index_page` writes `output/index.html` linking `latest_daily.html` + `latest_weekly.html`; written every run so the bare Pages URL resolves. |
 | **Investigate the ~9 skipped tickers** | TODO | Likely Wikipedia↔yfinance symbol mismatches → fix via `symbol_overrides.csv` or normalization in `scripts/build_universe.py`. Also surface a skipped/errored list in the run summary (today it's only in logs; SPEC §10 already specs the counts). |
 
 ## Tier 2 — Sharpen the signal (finish the PARTIAL pieces)

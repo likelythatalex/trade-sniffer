@@ -29,11 +29,17 @@ import pandas as pd
 
 from .combiner import combine
 from .config import Config, load_config, resolve_wyckoff_params
-from .data import DataError, fetch_ohlcv
+from .data import fetch_many, resolve_exchange
 from .data_quality import QualityReport, clean
 from .features import compute_features
 from .notify import has_transitions, make_notifier
-from .report import SIGNALS_COLUMNS, append_signals, render_dashboard, write_tv_import_file
+from .report import (
+    SIGNALS_COLUMNS,
+    append_signals,
+    render_dashboard,
+    write_index_page,
+    write_tv_import_file,
+)
 from .state import TimeframeState, classify_transitions, load_state, mtf_direction, save_state
 from .strategies.base import StrategyContext, StrategyResult
 from .strategies.registry import get_strategy
@@ -81,11 +87,18 @@ def run_timeframe(
     signal_rows: list[dict[str, Any]] = []
     current_qualifying: dict[str, dict[str, Any]] = {}
 
+    # Batch-fetch the whole universe up front (one threaded call, far faster at scale);
+    # a ticker that returned no data is simply absent and gets skipped below.
+    fetched_all = fetch_many(universe, timeframe, config, today=today)
+
     for ticker in universe:
         counts["scanned"] += 1
+        fetched = fetched_all.get(ticker)
+        if fetched is None:
+            counts["skipped"] += 1
+            logger.info("skip %s: no data", ticker)
+            continue
         try:
-            fetched = fetch_ohlcv(ticker, timeframe, config, today=today)
-
             if apply_liquidity_gate:
                 passes, reason = passes_liquidity_gate(fetched.df, config.liquidity)
                 if not passes:
@@ -116,11 +129,9 @@ def run_timeframe(
             if made_watchlist and composite.direction != "none":
                 counts["flagged"] += 1
                 current_qualifying[ticker] = {"score": round(composite.score, 2), "direction": composite.direction}
-                cards.append(_card(ticker, fetched.exchange, composite))
+                # Exchange is resolved here, lazily, only for the few tickers that flag.
+                cards.append(_card(ticker, resolve_exchange(ticker, config), composite))
 
-        except DataError as exc:
-            counts["skipped"] += 1
-            logger.info("skip %s: %s", ticker, exc)
         except Exception:  # fail soft: one bad ticker never kills the run (SPEC §10)
             counts["errored"] += 1
             logger.exception("error evaluating %s", ticker)
@@ -131,6 +142,7 @@ def run_timeframe(
         row["transition"] = transitions.get(row["ticker"], "none")
 
     render_dashboard(cards, timeframe, config, today=today, summary=counts)
+    write_index_page(config)  # gh-pages landing page so the bare Pages URL isn't a 404
     if config.output.write_tv_import_file:
         write_tv_import_file(cards, timeframe, config)
     append_signals(signal_rows, Path(config.output.dir) / "signals.csv")

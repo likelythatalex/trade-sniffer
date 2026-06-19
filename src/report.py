@@ -104,6 +104,49 @@ def write_tv_import_file(cards: list[dict[str, Any]], timeframe: str, config: Co
     return path
 
 
+def write_index_page(config: Config) -> Path:
+    """Write ``output/index.html`` — a tiny landing page linking the latest Daily and
+    Weekly dashboards, so the bare GitHub Pages URL (``/``) resolves instead of 404ing.
+
+    Static and link-only (the dashboards themselves host the TV widgets + attribution),
+    so it's safe to overwrite every run and lists both timeframes regardless of which
+    one just ran.
+    """
+    title = config.output.report_title
+    links = "\n".join(
+        f'      <li><a href="latest_{tf}.html">Latest {tf.capitalize()} dashboard</a></li>'
+        for tf in ("daily", "weekly")
+    )
+    html = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{title}</title>
+  <style>
+    body {{ font-family: system-ui, sans-serif; background: #0e0f13; color: #e6e6e6;
+           max-width: 40rem; margin: 4rem auto; padding: 0 1rem; line-height: 1.6; }}
+    a {{ color: #5aa9ff; }}
+    ul {{ list-style: none; padding: 0; }}
+    li {{ margin: 0.5rem 0; font-size: 1.15rem; }}
+  </style>
+</head>
+<body>
+  <h1>{title}</h1>
+  <p>Flags Wyckoff accumulation/distribution candidates for human review &mdash; it never trades.</p>
+  <ul>
+{links}
+  </ul>
+</body>
+</html>
+"""
+    output_dir = Path(config.output.dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / "index.html"
+    path.write_text(html, encoding="utf-8")
+    return path
+
+
 def append_signals(rows: list[dict[str, Any]], path: Path) -> None:
     """Append one row per evaluated ticker to ``signals.csv`` (schema ``SIGNALS_COLUMNS``).
 

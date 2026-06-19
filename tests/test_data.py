@@ -5,7 +5,7 @@ deterministic logic so it stays fast and hermetic (no yfinance calls).
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -15,11 +15,15 @@ from src import config as config_module
 from src.data import (
     DataError,
     _cache_path,
+    _drop_incomplete_last_bar,
+    _extract_splits,
     _fetch_window,
     _interval,
+    _last_bar_is_incomplete,
     _load_overrides,
     _normalize_columns,
     _resolve_exchange,
+    _split_batch,
 )
 
 CONFIG = config_module.load_config(Path("config.yaml"))
@@ -84,3 +88,77 @@ def test_load_overrides_missing_file_is_empty(tmp_path: Path) -> None:
 def test_cache_path_format() -> None:
     path = _cache_path(".cache", "AAPL", "daily", date(2024, 6, 1))
     assert path.name == "AAPL_daily_2024-06-01.pkl"
+
+
+# --- batch split + no-lookahead guard -----------------------------------------
+
+
+def _utc(year, month, day, hour) -> datetime:
+    return datetime(year, month, day, hour, tzinfo=timezone.utc)
+
+
+def test_split_batch_multiindex() -> None:
+    columns = pd.MultiIndex.from_product([["AAPL", "MSFT"], ["Open", "Close"]])
+    data = pd.DataFrame([[1, 2, 3, 4], [5, 6, 7, 8]], columns=columns)
+    out = _split_batch(data, ["AAPL", "MSFT"])
+    assert set(out) == {"AAPL", "MSFT"}
+    assert list(out["AAPL"].columns) == ["Open", "Close"]
+
+
+def test_split_batch_drops_all_nan_ticker() -> None:
+    # A symbol that returned nothing comes back as all-NaN columns -> dropped.
+    columns = pd.MultiIndex.from_product([["AAPL", "DEAD"], ["Open", "Close"]])
+    data = pd.DataFrame([[1, 2, None, None]], columns=columns)
+    out = _split_batch(data, ["AAPL", "DEAD"])
+    assert set(out) == {"AAPL"}
+
+
+def test_split_batch_single_ticker_flat_columns() -> None:
+    data = pd.DataFrame({"Open": [1.0], "Close": [1.5]})
+    out = _split_batch(data, ["AAPL"])
+    assert list(out) == ["AAPL"]
+
+
+def test_extract_splits_keeps_only_nonzero() -> None:
+    frame = pd.DataFrame(
+        {"Stock Splits": [0.0, 2.0, 0.0]},
+        index=pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-03"]),
+    )
+    splits = _extract_splits(frame)
+    assert list(splits) == [2.0]
+
+
+def test_extract_splits_absent_column_is_empty() -> None:
+    assert _extract_splits(pd.DataFrame({"open": [1.0]})).empty
+
+
+def test_daily_bar_incomplete_only_during_session() -> None:
+    today = date(2024, 6, 5)  # a Wednesday
+    # Same-day bar before the close cutoff is partial; after it is complete.
+    assert _last_bar_is_incomplete(today, "daily", _utc(2024, 6, 5, 15)) is True
+    assert _last_bar_is_incomplete(today, "daily", _utc(2024, 6, 5, 22)) is False
+    # A prior day's bar is always complete.
+    assert _last_bar_is_incomplete(date(2024, 6, 4), "daily", _utc(2024, 6, 5, 15)) is False
+
+
+def test_weekly_bar_incomplete_until_friday_close() -> None:
+    monday = date(2024, 6, 3)  # bar dated to the start of that ISO week
+    # Mid-week the weekly bar is still forming...
+    assert _last_bar_is_incomplete(monday, "weekly", _utc(2024, 6, 5, 12)) is True
+    # ...and after Friday's close (Saturday run) it's complete.
+    assert _last_bar_is_incomplete(monday, "weekly", _utc(2024, 6, 8, 14)) is False
+    # A prior week's bar is always complete.
+    assert _last_bar_is_incomplete(date(2024, 5, 27), "weekly", _utc(2024, 6, 5, 12)) is False
+
+
+def test_drop_incomplete_last_bar_removes_partial() -> None:
+    df = pd.DataFrame(
+        {"close": [1.0, 2.0]},
+        index=pd.to_datetime(["2024-06-04", "2024-06-05"]),
+    )
+    # Intraday on 2024-06-05 -> the trailing bar is partial and dropped.
+    trimmed = _drop_incomplete_last_bar(df, "daily", _utc(2024, 6, 5, 15))
+    assert len(trimmed) == 1 and trimmed.index[-1] == pd.Timestamp("2024-06-04")
+    # After the close -> nothing dropped.
+    kept = _drop_incomplete_last_bar(df, "daily", _utc(2024, 6, 5, 22))
+    assert len(kept) == 2

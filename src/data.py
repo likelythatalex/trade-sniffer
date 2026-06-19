@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pickle
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +31,13 @@ from .config import Config, required_history
 _COLUMN_MAP = {"Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"}
 _OHLCV = ["open", "high", "low", "close", "volume"]
 _INTERVALS = {"daily": "1d", "weekly": "1wk"}
+
+# No-lookahead guard. 16:00 ET (the US regular-session close) is 20:00 UTC under EDT
+# and 21:00 UTC under EST; we use the later hour so a bar is only ever treated as
+# "closed" once it's closed in *both* DST states. The cost is a ~1h window after the
+# summer close where we conservatively fall back to the prior bar (safe, just stale).
+# This avoids a timezone-database (tzdata) dependency on Windows.
+_US_CLOSE_UTC_HOUR = 21
 
 
 class DataError(Exception):
@@ -73,8 +80,11 @@ def fetch_ohlcv(
         raise DataError(f"no data returned for {ticker} [{timeframe}]")
 
     overrides = _load_overrides(Path(config.symbols.override_map_file))
+    df = _drop_incomplete_last_bar(_normalize_columns(raw, ticker), timeframe, _now())
+    if df.empty:
+        raise DataError(f"{ticker} [{timeframe}]: no closed bars (only an in-session bar).")
     result = FetchResult(
-        df=_normalize_columns(raw, ticker),
+        df=df,
         exchange=_resolve_exchange(metadata, ticker, overrides),
         corporate_actions=splits if splits is not None else pd.Series(dtype=float),
     )
@@ -82,9 +92,70 @@ def fetch_ohlcv(
     return result
 
 
+def fetch_many(
+    tickers: list[str], timeframe: str, config: Config, today: date | None = None
+) -> dict[str, FetchResult]:
+    """Batch-fetch OHLCV (+splits) for many tickers in one threaded yfinance call.
+
+    Far faster than per-ticker fetches at universe scale (network latency dominates).
+    Exchange is **not** resolved here — it's only needed for tickers that reach the
+    report, so ``resolve_exchange`` does it lazily for those few. Per-ticker results
+    are cached, so cache hits skip the network and only the misses are downloaded; a
+    ticker absent from the batch result simply gets no entry (the caller fail-soft
+    skips it). A total download failure raises ``DataError`` (source-outage → abort,
+    SPEC §10), rather than silently producing an empty report.
+    """
+    today = today or date.today()
+    results: dict[str, FetchResult] = {}
+    misses: list[str] = []
+    for ticker in tickers:
+        cached = _read_cache(_cache_path(config.data.cache_dir, ticker, timeframe, today))
+        if cached is not None:
+            results[ticker] = cached
+        else:
+            misses.append(ticker)
+
+    if misses:
+        downloaded = _download_many(misses, timeframe, config, today)
+        now = _now()
+        for ticker in misses:
+            frame = downloaded.get(ticker)
+            if frame is None or frame.empty:
+                continue  # no data for this ticker -> caller skips it
+            try:
+                df = _drop_incomplete_last_bar(_normalize_columns(frame, ticker), timeframe, now)
+            except DataError:
+                continue
+            if df.empty:
+                continue
+            result = FetchResult(df=df, exchange=None, corporate_actions=_extract_splits(frame))
+            _write_cache(_cache_path(config.data.cache_dir, ticker, timeframe, today), result)
+            results[ticker] = result
+    return results
+
+
 def fetch_spy(timeframe: str, config: Config, today: date | None = None) -> pd.DataFrame:
     """Fetch SPY for relative-strength (§7.1). Always fetched; gate-exempt."""
     return fetch_ohlcv("SPY", timeframe, config, today).df
+
+
+def resolve_exchange(ticker: str, config: Config) -> str | None:
+    """Resolve the TradingView exchange prefix for one ticker (override map first,
+    else a light metadata fetch). Only called for tickers that reach the report, so
+    it's a handful of extra calls per run — not one per universe name. Failures →
+    ``None`` (the report falls back to the bare ticker)."""
+    overrides = _load_overrides(Path(config.symbols.override_map_file))
+    if ticker in overrides:
+        return overrides[ticker]
+    try:
+        import yfinance as yf
+
+        handle = yf.Ticker(ticker)
+        handle.history(period="5d", interval="1d")  # cheap call that populates metadata
+        metadata = getattr(handle, "history_metadata", {}) or {}
+    except Exception:
+        return None
+    return _resolve_exchange(metadata, ticker, overrides)
 
 
 # --- Network boundary (the only impure part; isolated for easy mocking) -------
@@ -109,7 +180,101 @@ def _download(
         raise DataError(f"fetch failed for {ticker} [{timeframe}]: {exc}") from exc
 
 
+def _download_many(
+    tickers: list[str], timeframe: str, config: Config, today: date
+) -> dict[str, pd.DataFrame]:
+    """Pull many symbols at once via ``yf.download`` (threaded), with splits/dividends
+    (``actions=True``). Returns ``{ticker: per-ticker OHLCV+actions frame}``. Raises
+    ``DataError`` only on a total failure of the batch call."""
+    try:
+        import yfinance as yf
+
+        start = _fetch_window(timeframe, config, today)
+        data = yf.download(
+            tickers=tickers,
+            start=start.isoformat(),
+            interval=_interval(timeframe),
+            auto_adjust=True,
+            actions=True,
+            group_by="ticker",
+            threads=True,
+            progress=False,
+        )
+    except DataError:
+        raise
+    except Exception as exc:
+        raise DataError(f"batch fetch failed [{timeframe}]: {exc}") from exc
+    return _split_batch(data, tickers)
+
+
 # --- Pure helpers (unit-tested) -----------------------------------------------
+
+
+def _now() -> datetime:
+    """Current UTC time, isolated so the no-lookahead guard is easy to test."""
+    return datetime.now(timezone.utc)
+
+
+def _split_batch(data: pd.DataFrame, tickers: list[str]) -> dict[str, pd.DataFrame]:
+    """Split a ``yf.download`` result into ``{ticker: frame}``.
+
+    With several tickers and ``group_by="ticker"`` the columns are a MultiIndex
+    ``(ticker, field)``; with a single ticker they're flat. Empty/all-NaN per-ticker
+    frames (a symbol that returned nothing) are dropped. Pure → unit-testable.
+    """
+    out: dict[str, pd.DataFrame] = {}
+    if isinstance(data.columns, pd.MultiIndex):
+        available = set(data.columns.get_level_values(0))
+        for ticker in tickers:
+            if ticker in available:
+                frame = data[ticker].dropna(how="all")
+                if not frame.empty:
+                    out[ticker] = frame
+    elif len(tickers) == 1 and not data.empty:
+        frame = data.dropna(how="all")
+        if not frame.empty:
+            out[tickers[0]] = frame
+    return out
+
+
+def _extract_splits(frame: pd.DataFrame) -> pd.Series:
+    """Non-zero stock splits from a ``yf.download(actions=True)`` frame (date → ratio),
+    matching the shape ``data_quality`` expects. Empty Series if absent."""
+    if "Stock Splits" not in frame.columns:
+        return pd.Series(dtype=float)
+    splits = frame["Stock Splits"]
+    return splits[splits != 0]
+
+
+def _last_bar_is_incomplete(last_bar_date: date, timeframe: str, now: datetime) -> bool:
+    """No-lookahead guard: is the most recent bar still forming (period not yet closed)?
+
+    Scheduled runs happen well after the close, so this is ``False`` for them — it only
+    bites off-schedule (e.g. intraday) manual runs, where yfinance hands back a live
+    partial bar. Holidays need no handling: a closed day has no fresh bar to drop.
+    """
+    now = now.astimezone(timezone.utc)
+    if timeframe == "daily":
+        if last_bar_date < now.date():
+            return False  # bar is from a prior day -> already closed
+        return now.hour < _US_CLOSE_UTC_HOUR  # today's bar, before the close -> partial
+    if timeframe == "weekly":
+        if last_bar_date.isocalendar()[:2] != now.date().isocalendar()[:2]:
+            return False  # bar is from a prior ISO week -> closed
+        weekday = now.weekday()  # Mon=0 .. Sun=6; the week closes at Friday's close
+        return weekday < 4 or (weekday == 4 and now.hour < _US_CLOSE_UTC_HOUR)
+    return False
+
+
+def _drop_incomplete_last_bar(df: pd.DataFrame, timeframe: str, now: datetime) -> pd.DataFrame:
+    """Drop the trailing bar if its period hasn't closed yet (see ``_last_bar_is_incomplete``)."""
+    if df.empty:
+        return df
+    last = df.index[-1]
+    last_date = last.date() if hasattr(last, "date") else last
+    if _last_bar_is_incomplete(last_date, timeframe, now):
+        return df.iloc[:-1]
+    return df
 
 
 def _interval(timeframe: str) -> str:
