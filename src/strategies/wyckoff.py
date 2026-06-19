@@ -193,21 +193,58 @@ def score_volume_behavior(
         contributions.append(-100.0)
         reasons.append("no demand (narrow up-bar, low volume at resistance)")
 
-    # Climax: a genuine volume EXPANSION in the recent window at an extreme. We key off
-    # volume_ratio (a real spike) rather than volume_pctile, which ties to ~100 on flat
-    # volume and would false-fire. volume_pctile_high stays a config alternative for later.
-    climax_window = int(params["climax_window"])
-    recent_ratio = features["volume_ratio"].iloc[-climax_window:].max()
-    if pd.notna(recent_ratio) and recent_ratio >= high_volume:
-        if near_support:
-            contributions.append(100.0)
-            reasons.append("selling-climax volume near support")
-        elif near_resistance:
-            contributions.append(-100.0)
-            reasons.append("buying-climax volume near resistance")
+    # Climax: a volume spike at an extreme that is FOLLOWED BY a sharp reaction (the
+    # exhaustion-then-reversal that actually defines a climax — a spike with no reaction
+    # is just a spike). See _score_climax.
+    climax_contribution, climax_reason = _score_climax(df, features, range_info, params)
+    if climax_contribution is not None:
+        contributions.append(climax_contribution)
+        reasons.append(climax_reason)
 
     score = sum(contributions) / len(contributions) if contributions else 0.0
     return score, reasons
+
+
+def _score_climax(
+    df: pd.DataFrame, features: pd.DataFrame, range_info: dict[str, Any], params: dict[str, Any]
+) -> tuple[float | None, str | None]:
+    """Climax at a range extreme: a volume spike (``volume_ratio`` ≥ ``high_volume_ratio``)
+    *and* a subsequent sharp reaction of at least ``climax_reaction_atr`` × ATR away from
+    the climax bar's extreme. The reaction is the confirmation the prior code lacked — a
+    bare spike now abstains. ``(None, None)`` when mid-range, no spike, or no reaction yet
+    (climax too recent to judge). ``volume_pctile`` alternative stays deferred."""
+    near_support = range_info.get("near_support", False)
+    near_resistance = range_info.get("near_resistance", False)
+    if not (near_support or near_resistance):
+        return None, None
+
+    n = len(df)
+    window = min(int(params["climax_window"]), n)
+    high_volume = float(params["high_volume_ratio"])
+    vol = features["volume_ratio"].iloc[-window:]
+    peak = vol.max()
+    if pd.isna(peak) or peak < high_volume:
+        return None, None  # no genuine volume spike in the window
+
+    climax_idx = n - window + int(vol.to_numpy().argmax())
+    after = df.iloc[climax_idx + 1 :]
+    if after.empty:
+        return None, None  # climax is the last bar -> reaction not observable yet
+
+    atr = float((df["high"].iloc[-window:] - df["low"].iloc[-window:]).mean())
+    if atr <= 0:
+        return None, None
+    threshold = float(params["climax_reaction_atr"]) * atr
+
+    if near_support:  # selling climax -> price should rally off the climax low
+        reaction = float(after["close"].max()) - float(df["low"].iloc[climax_idx])
+        if reaction >= threshold:
+            return 100.0, "selling-climax + reaction near support"
+    if near_resistance:  # buying climax -> price should drop off the climax high
+        reaction = float(df["high"].iloc[climax_idx]) - float(after["close"].min())
+        if reaction >= threshold:
+            return -100.0, "buying-climax + reaction near resistance"
+    return None, None
 
 
 def detect_spring_upthrust(

@@ -43,7 +43,7 @@ Detail/status per concept lives in `appendix.md`; definitions in `wyckoff_method
 | **RS-vs-SPY confirmation** | DONE | SPY batch-fetched per timeframe (`scanner._benchmark_close`), passed via `StrategyContext.benchmark_close`; `wyckoff._relative_strength` scores stock-minus-SPY return over `trend_lookback`, logged as `rs_vs_spy`. Fixed a tz-index mismatch between the two fetch paths in `_normalize_columns`. SPEC §7.1. |
 | **Volatility contraction ("the coil")** | DONE | `wyckoff.score_vol_contraction` compares recent bar-range vs earlier in the range (`vol_contraction_window` tunable); direction from range location. Feeds `confirmation`, logged as `vol_contraction`. SPEC §7.2. |
 | **Complete spring/upthrust** | DONE | Break+snapback is the gate; magnitude scales from `SPRING_BASE_FRACTION` to full via rejection wick (`spring_wick_pct`) + above-median volume on the false-break bar. SPEC §6.3. |
-| **Climax reaction check** | TODO | Add the reversal/reaction confirmation; today it's a volume-expansion proxy only. SPEC §6.2; appendix "Climax" (PARTIAL); methodology §2.3. |
+| **Climax reaction check** | DONE | `wyckoff._score_climax` now requires a volume spike at an extreme **and** a subsequent ≥ `climax_reaction_atr` × ATR reaction; a bare spike abstains. SPEC §6.2; methodology §2.3. (`volume_pctile` alternative still deferred.) |
 | **Calendar-based missing-bar detection** | TODO | Needs a market calendar; deferred in v1. appendix "Data Quality" (PARTIAL); SPEC §5.2. |
 
 ## Tier 3 — Validation & calibration (does the score actually work?)

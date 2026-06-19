@@ -18,6 +18,7 @@ from src.features import compute_features
 from src.strategies.base import StrategyContext
 from src.strategies.wyckoff import (
     WyckoffStrategy,
+    _score_climax,
     detect_spring_upthrust,
     detect_trading_range,
     score_confirmation,
@@ -242,6 +243,35 @@ def test_vol_contraction_abstains_when_expanding() -> None:
     # Recent ranges WIDER than earlier -> not a coil -> abstain even near an extreme.
     df = bars([103.0] * 10 + [110.0] * 5, [101.0] * 10 + [100.0] * 5, [102.0] * 15, [102.0] * 15, [100.0] * 15)
     assert score_vol_contraction(df, {"near_support": True, "near_resistance": False}, _coil_params()) is None
+
+
+# --- climax (volume spike + reaction) ----------------------------------------
+
+
+def _climax_df(reaction: bool) -> pd.DataFrame:
+    # Range ~100-104, then a high-volume poke to 96 (the climax bar at idx 10).
+    highs = [104.0] * 10 + [100.0]
+    lows = [100.0] * 10 + [96.0]
+    closes = [102.0] * 10 + [97.0]
+    vols = [100.0] * 10 + [500.0]  # volume spike on the climax bar
+    if reaction:  # price rallies back off the climax low
+        follow_h, follow_l, follow_c = [104.0] * 4, [100.0] * 4, [101.0, 102.0, 103.0, 103.0]
+    else:  # price stays pinned at the lows -> no reaction
+        follow_h, follow_l, follow_c = [100.0] * 4, [96.0] * 4, [97.0] * 4
+    highs += follow_h; lows += follow_l; closes += follow_c
+    return bars(highs, lows, closes, closes, vols + [100.0] * 4)
+
+
+def test_climax_fires_only_with_reaction() -> None:
+    params = make_params(climax_window=10, climax_reaction_atr=1.0, high_volume_ratio=2.0)
+    near_support = {"near_support": True, "near_resistance": False}
+
+    contribution, reason = _score_climax(_climax_df(reaction=True), compute_features(_climax_df(True), 5), near_support, params)
+    assert contribution == 100.0 and "reaction" in reason
+
+    # Same volume spike, but no follow-through reaction -> abstain (a spike is not a climax).
+    no_reaction, _ = _score_climax(_climax_df(reaction=False), compute_features(_climax_df(False), 5), near_support, params)
+    assert no_reaction is None
 
 
 # --- evaluate (the M1 proof) --------------------------------------------------

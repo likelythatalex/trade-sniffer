@@ -106,12 +106,14 @@ version. Think of it as a README for the *domain*, not the code.
 ### Climax (selling / buying)
 - **Plain meaning:** A volume peak that marks exhaustion of a move, often preceding a
   reversal and the start of a range.
-- **How it's implemented here:** v1 uses a volume-EXPANSION proxy (`volume_ratio` ≥
-  `high_volume_ratio` in the recent `climax_window`, at a range extreme), feeding the
-  `volume_behavior` sub-score. The reversal/reaction confirmation and the `volume_pctile`
-  alternative are deferred. Climax does **not** set the range boundary — the band does
-  (SPEC §6.1); climax-anchored boundaries are FUTURE. Methodology §2.3.
-- **Status:** `PARTIAL` (`strategies/wyckoff.py`): expansion proxy only; reaction check TODO.
+- **How it's implemented here:** `wyckoff._score_climax` requires a volume spike
+  (`volume_ratio` ≥ `high_volume_ratio` in the recent `climax_window`, at a range extreme)
+  **and** a subsequent sharp reaction of ≥ `climax_reaction_atr` × ATR away from the climax
+  bar's extreme — a spike with no reaction abstains. Feeds the `volume_behavior` sub-score.
+  Climax does **not** set the range boundary — the band does (SPEC §6.1); climax-anchored
+  boundaries are FUTURE; the `volume_pctile` alternative remains deferred. Methodology §2.3.
+- **Status:** `IMPLEMENTED` (`strategies/wyckoff.py`, tested in `tests/test_wyckoff.py`):
+  spike + reaction; `volume_pctile` alternative still deferred.
 
 ### Spring / Upthrust
 - **Plain meaning:** A false breakdown below support (spring, bullish) or false breakout
