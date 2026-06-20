@@ -221,9 +221,10 @@ version. Think of it as a README for the *domain*, not the code.
 - **How it's implemented here:** Only closed bars reach evaluation — `data._drop_incomplete_last_bar`
   drops a trailing in-session/in-week bar on off-schedule runs (`_last_bar_is_incomplete`,
   conservative 21:00-UTC close cutoff so no tzdata dependency). Scheduled runs are post-close,
-  so it's a no-op there.
-- **Status:** `PARTIAL` (`data.py`, tested in `tests/test_data.py`): fetch-level guard done;
-  the strategy-level acceptance test (bar-N unchanged by appending bar N+1, SPEC §11) still TODO.
+  so it's a no-op there. The strategy is also order-independent: evaluating as-of a bar is
+  unchanged by appending later bars.
+- **Status:** `IMPLEMENTED` (`data.py` fetch guard + the strategy acceptance test
+  `test_no_lookahead_evaluation_unaffected_by_future_bars`, SPEC §11/§13).
 
 ### Dark Pool / Off-Exchange Prints
 - **Plain meaning:** Large trades executed away from public exchanges, reported after the
@@ -242,12 +243,16 @@ version. Think of it as a README for the *domain*, not the code.
   single bad bar can fake a volume climax.
 - **How it's implemented here:** A conservative detect → repair-the-obvious → else-exclude
   step that *never invents data* and logs what it touched (`data_quality.clean`). Repairs:
-  drop duplicate timestamps, null-OHLC and zero/null-volume bars. Excludes: unexplained
-  range spike (range >> trailing ATR), split-adjustment mismatch with no corporate-action
-  basis, or too few valid bars. Runs **before** normalization. Pipeline: `data →
-  data_quality → features → strategy`.
-- **Status:** `PARTIAL` (`data_quality.py`, tested in `tests/test_data_quality.py`):
-  calendar-based missing-bar detection/forward-fill deferred (needs a market calendar).
+  drop duplicate timestamps, null-OHLC and zero/null-volume bars; forward-fill a single
+  isolated missing session. Excludes: unexplained range spike (range >> trailing ATR),
+  split-adjustment mismatch with no corporate-action basis, or too few valid bars. For daily,
+  completeness is measured against the **NYSE trading calendar** (expected sessions computed in
+  `data.py` via `pandas-market-calendars` and passed in, so this module stays pure); weekly
+  falls back to completeness vs the bars received. Runs **before** normalization. Pipeline:
+  `data → data_quality → features → strategy`.
+- **Status:** `IMPLEMENTED` (`data_quality.py` + `data.py`, tested in
+  `tests/test_data_quality.py` / `tests/test_data.py`): includes calendar-based missing-bar
+  detection (daily). The single-isolated-bar forward-fill uses a flat zero-volume bar.
 
 ### Resampling vs. Native Timeframe
 - **Plain meaning:** Weekly bars can be aggregated from daily or fetched directly; the choice

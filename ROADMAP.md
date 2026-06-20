@@ -29,7 +29,7 @@ elsewhere, so their detail lives here.
 | Item | Status | Notes / detail |
 |---|---|---|
 | **Batch fetching** (`yf.download` multi-symbol) | DONE | `data.fetch_many` does one threaded batch (OHLCV + splits via `actions=True`); cache hits skip the network, misses are downloaded. Exchange is now resolved lazily (`resolve_exchange`) only for flagged tickers, not all 516. |
-| **Drop the partial in-session bar** | DONE | `data._drop_incomplete_last_bar` drops the trailing bar when its period hasn't closed (conservative 21:00-UTC cutoff, no tzdata dep). Off-schedule runs stay no-lookahead. Strategy-level bar-N/bar-N+1 acceptance test (SPEC §11) still pending → see "Lookahead Bias" in `appendix.md`. |
+| **Drop the partial in-session bar** | DONE | `data._drop_incomplete_last_bar` drops the trailing bar when its period hasn't closed (conservative 21:00-UTC cutoff, no tzdata dep). Off-schedule runs stay no-lookahead. (The strategy-level bar-N/bar-N+1 acceptance test already exists — `test_no_lookahead_evaluation_unaffected_by_future_bars`.) |
 | **`index.html` landing page on gh-pages** | DONE | `report.write_index_page` writes `output/index.html` linking `latest_daily.html` + `latest_weekly.html`; written every run so the bare Pages URL resolves. |
 | **Investigate the ~9 skipped tickers** | TODO | Likely Wikipedia↔yfinance symbol mismatches → fix via `symbol_overrides.csv` or normalization in `scripts/build_universe.py`. Also surface a skipped/errored list in the run summary (today it's only in logs; SPEC §10 already specs the counts). |
 
@@ -44,7 +44,7 @@ Detail/status per concept lives in `appendix.md`; definitions in `wyckoff_method
 | **Volatility contraction ("the coil")** | DONE | `wyckoff.score_vol_contraction` compares recent bar-range vs earlier in the range (`vol_contraction_window` tunable); direction from range location. Feeds `confirmation`, logged as `vol_contraction`. SPEC §7.2. |
 | **Complete spring/upthrust** | DONE | Break+snapback is the gate; magnitude scales from `SPRING_BASE_FRACTION` to full via rejection wick (`spring_wick_pct`) + above-median volume on the false-break bar. SPEC §6.3. |
 | **Climax reaction check** | DONE | `wyckoff._score_climax` now requires a volume spike at an extreme **and** a subsequent ≥ `climax_reaction_atr` × ATR reaction; a bare spike abstains. SPEC §6.2; methodology §2.3. (`volume_pctile` alternative still deferred.) |
-| **Calendar-based missing-bar detection** | TODO | Needs a market calendar; deferred in v1. appendix "Data Quality" (PARTIAL); SPEC §5.2. |
+| **Calendar-based missing-bar detection** | DONE | `pandas-market-calendars` (NYSE); `data.py` computes expected sessions (once per batch) and passes them into the pure `data_quality.clean`, which flags missing sessions, forward-fills one isolated bar, and measures completeness vs the calendar (daily). SPEC §5.2. |
 
 ## Tier 3 — Validation & calibration (does the score actually work?)
 

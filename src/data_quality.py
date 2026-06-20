@@ -9,9 +9,11 @@ module stays pure and testable.
 
 Runs *before* ``features.py`` so a bad bar can't poison the rolling baseline.
 
-Scope note: calendar-based *missing-bar* detection/forward-fill (SPEC §5.2) needs a
-trading-calendar dependency and is deferred — yfinance data for liquid names is
-generally complete. Duplicates, bad bars, spikes, and split mismatches are handled.
+Calendar-based *missing-bar* detection (SPEC §5.2): when ``data.py`` supplies the
+expected NYSE sessions (daily timeframe), this module flags sessions with no bar,
+forward-fills at most a single isolated one, and measures completeness against the
+calendar (not just the bars received). The calendar itself is computed in ``data.py``
+so this module stays pure.
 """
 from __future__ import annotations
 
@@ -46,13 +48,19 @@ class QualityReport:
 
 
 def clean(
-    df: pd.DataFrame, corporate_actions: pd.Series | None, config: DataQualityConfig
+    df: pd.DataFrame,
+    corporate_actions: pd.Series | None,
+    config: DataQualityConfig,
+    expected_sessions: pd.DatetimeIndex | None = None,
 ) -> tuple[pd.DataFrame, QualityReport]:
     """Return a cleaned frame + a ``QualityReport``.
 
     Repairs (mechanical): drop duplicate timestamps, null-OHLC bars, zero/null-volume
-    bars. Excludes (conservative): an unexplained price spike, a split-adjustment
-    mismatch with no corporate-action basis, or too few valid bars remaining.
+    bars; forward-fill a single isolated missing session. Excludes (conservative): an
+    unexplained price spike, a split-adjustment mismatch with no corporate-action basis,
+    or too few valid bars remaining. ``expected_sessions`` (from ``data.py``, daily only)
+    enables calendar-based missing-bar detection; when absent, completeness is measured
+    against the bars received.
     """
     report = QualityReport()
     n_input = len(df)
@@ -97,6 +105,26 @@ def clean(
             )
             return work, report
 
+    # --- Missing-bar detection (daily; expected sessions supplied by data.py) -
+    if expected_sessions is not None and len(expected_sessions) > 0:
+        present = set(work.index.normalize())
+        missing = [session for session in expected_sessions if session not in present]
+        if len(missing) == 1:  # SPEC §5.2: forward-fill at most one isolated missing bar
+            work = _forward_fill_session(work, missing[0])
+            report.repairs.append(f"forward-filled 1 missing session ({missing[0].date()})")
+            present = set(work.index.normalize())
+        present_count = sum(1 for session in expected_sessions if session in present)
+        n_expected = len(expected_sessions)
+        valid_pct = present_count / n_expected * 100.0
+        if valid_pct < config.min_valid_bars_pct:
+            report.excluded = True
+            report.reason = (
+                f"only {present_count}/{n_expected} expected sessions present "
+                f"({valid_pct:.0f}% < {config.min_valid_bars_pct}%)"
+            )
+        return work, report
+
+    # Fallback (weekly, or no calendar): completeness vs the bars actually received.
     valid_pct = len(work) / n_input * 100.0
     if valid_pct < config.min_valid_bars_pct:
         report.excluded = True
@@ -105,6 +133,21 @@ def clean(
         )
 
     return work, report
+
+
+def _forward_fill_session(df: pd.DataFrame, session: pd.Timestamp) -> pd.DataFrame:
+    """Insert a flat carry-forward bar for one missing session: prior close as O/H/L/C,
+    zero volume (the most honest 'no data' value — we never invent a price move). Bounded
+    to a single isolated session by the caller, per SPEC §5.2."""
+    prior = df.index[df.index < session]
+    if len(prior) == 0:
+        return df  # nothing earlier to carry from; leave the gap
+    prev_close = float(df.loc[prior[-1], "close"])
+    filled = pd.DataFrame(
+        {"open": prev_close, "high": prev_close, "low": prev_close, "close": prev_close, "volume": 0.0},
+        index=[session],
+    )
+    return pd.concat([df, filled]).sort_index()
 
 
 def _detect_range_spikes(df: pd.DataFrame, max_atr_mult: float) -> pd.Series:

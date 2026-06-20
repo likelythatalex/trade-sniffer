@@ -108,7 +108,9 @@ def run_timeframe(
                     logger.info("skip %s: %s", ticker, reason)
                     continue
 
-            cleaned, quality = clean(fetched.df, fetched.corporate_actions, config.data_quality)
+            cleaned, quality = clean(
+                fetched.df, fetched.corporate_actions, config.data_quality, fetched.expected_sessions
+            )
             if quality.excluded:
                 counts["skipped"] += 1
                 logger.info("skip %s: %s", ticker, quality.reason)

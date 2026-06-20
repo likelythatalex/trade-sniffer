@@ -53,11 +53,15 @@ class FetchResult:
         exchange: resolved exchange for the TV symbol; ``None`` if unresolved.
         corporate_actions: splits Series (date -> ratio), passed into
             ``data_quality`` so that module stays pure.
+        expected_sessions: NYSE trading-session dates spanning the frame (daily only;
+            ``None`` for weekly), passed into ``data_quality`` for missing-bar detection
+            — computed here, at the I/O boundary, so the quality module stays pure.
     """
 
     df: pd.DataFrame
     exchange: str | None
     corporate_actions: pd.Series
+    expected_sessions: pd.DatetimeIndex | None = None
 
 
 def fetch_ohlcv(
@@ -87,6 +91,7 @@ def fetch_ohlcv(
         df=df,
         exchange=_resolve_exchange(metadata, ticker, overrides),
         corporate_actions=splits if splits is not None else pd.Series(dtype=float),
+        expected_sessions=_expected_sessions(timeframe, df.index),
     )
     _write_cache(cache_file, result)
     return result
@@ -118,6 +123,13 @@ def fetch_many(
     if misses:
         downloaded = _download_many(misses, timeframe, config, today)
         now = _now()
+        # Compute the session calendar ONCE for the whole batch (a schedule() call is
+        # ~0.1s; per-ticker would cost ~a minute at universe scale), then slice per ticker.
+        master_sessions = (
+            _session_calendar(_fetch_window(timeframe, config, today), today)
+            if timeframe == "daily"
+            else None
+        )
         for ticker in misses:
             frame = downloaded.get(ticker)
             if frame is None or frame.empty:
@@ -128,7 +140,12 @@ def fetch_many(
                 continue
             if df.empty:
                 continue
-            result = FetchResult(df=df, exchange=None, corporate_actions=_extract_splits(frame))
+            result = FetchResult(
+                df=df,
+                exchange=None,
+                corporate_actions=_extract_splits(frame),
+                expected_sessions=_slice_sessions(master_sessions, df.index),
+            )
             _write_cache(_cache_path(config.data.cache_dir, ticker, timeframe, today), result)
             results[ticker] = result
     return results
@@ -213,6 +230,36 @@ def _download_many(
 def _now() -> datetime:
     """Current UTC time, isolated so the no-lookahead guard is easy to test."""
     return datetime.now(timezone.utc)
+
+
+_NYSE_CALENDAR: Any = None
+
+
+def _session_calendar(start: date, end: date) -> pd.DatetimeIndex:
+    """NYSE trading-session dates in ``[start, end]`` (holiday/early-close aware), as a
+    normalized DatetimeIndex. The calendar object is built once and reused."""
+    global _NYSE_CALENDAR
+    if _NYSE_CALENDAR is None:
+        import pandas_market_calendars as mcal
+
+        _NYSE_CALENDAR = mcal.get_calendar("NYSE")
+    schedule = _NYSE_CALENDAR.schedule(start_date=pd.Timestamp(start), end_date=pd.Timestamp(end))
+    return schedule.index.normalize()
+
+
+def _expected_sessions(timeframe: str, index: pd.Index) -> pd.DatetimeIndex | None:
+    """Expected trading sessions spanning a frame's index (daily only). ``None`` for
+    weekly (anchored weekly bars make a session count ambiguous) or a too-short index."""
+    if timeframe != "daily" or not isinstance(index, pd.DatetimeIndex) or len(index) < 2:
+        return None
+    return _session_calendar(index[0], index[-1])
+
+
+def _slice_sessions(master: pd.DatetimeIndex | None, index: pd.Index) -> pd.DatetimeIndex | None:
+    """Slice a precomputed session calendar to a single frame's date span (pure, cheap)."""
+    if master is None or not isinstance(index, pd.DatetimeIndex) or len(index) < 2:
+        return None
+    return master[(master >= index[0]) & (master <= index[-1])]
 
 
 def _split_batch(data: pd.DataFrame, tickers: list[str]) -> dict[str, pd.DataFrame]:

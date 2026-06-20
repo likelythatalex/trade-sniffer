@@ -100,3 +100,33 @@ def test_too_many_bad_bars_excludes_ticker() -> None:
 def test_empty_frame_excluded() -> None:
     cleaned, report = clean(pd.DataFrame(), None, dq_config())
     assert report.excluded is True
+
+
+# --- calendar-based missing-bar detection ------------------------------------
+
+
+def test_single_missing_session_is_forward_filled() -> None:
+    df = make_ohlcv(n=20)
+    expected = df.index  # every business day is an expected session
+    with_gap = df.drop(df.index[10])  # one isolated session missing
+    cleaned, report = clean(with_gap, None, dq_config(), expected_sessions=expected)
+    assert report.excluded is False
+    assert any("forward-filled" in r for r in report.repairs)
+    assert df.index[10] in cleaned.index  # the gap was filled
+    assert cleaned.loc[df.index[10], "volume"] == 0.0  # honest "no data" bar
+
+
+def test_too_many_missing_sessions_excludes_ticker() -> None:
+    df = make_ohlcv(n=20)
+    expected = df.index
+    with_gaps = df.drop(df.index[5:10])  # 5/20 sessions missing -> 75% < 95%
+    cleaned, report = clean(with_gaps, None, dq_config(), expected_sessions=expected)
+    assert report.excluded is True
+    assert "expected sessions" in (report.reason or "")
+
+
+def test_complete_series_vs_calendar_not_excluded() -> None:
+    df = make_ohlcv(n=20)
+    cleaned, report = clean(df, None, dq_config(), expected_sessions=df.index)
+    assert report.excluded is False
+    assert report.repairs == []

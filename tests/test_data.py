@@ -16,6 +16,7 @@ from src.data import (
     DataError,
     _cache_path,
     _drop_incomplete_last_bar,
+    _expected_sessions,
     _extract_splits,
     _fetch_window,
     _interval,
@@ -23,6 +24,7 @@ from src.data import (
     _load_overrides,
     _normalize_columns,
     _resolve_exchange,
+    _slice_sessions,
     _split_batch,
 )
 
@@ -162,6 +164,27 @@ def test_weekly_bar_incomplete_until_friday_close() -> None:
     assert _last_bar_is_incomplete(monday, "weekly", _utc(2024, 6, 8, 14)) is False
     # A prior week's bar is always complete.
     assert _last_bar_is_incomplete(date(2024, 5, 27), "weekly", _utc(2024, 6, 5, 12)) is False
+
+
+def test_expected_sessions_daily_excludes_holiday() -> None:
+    # The window spans July 4 (a US market holiday) -> it must not be an expected session.
+    idx = pd.DatetimeIndex(["2024-07-01", "2024-07-08"])
+    sessions = _expected_sessions("daily", idx)
+    assert sessions is not None
+    assert pd.Timestamp("2024-07-04") not in set(sessions)  # holiday
+    assert pd.Timestamp("2024-07-05") in set(sessions)  # regular session
+
+
+def test_expected_sessions_weekly_is_none() -> None:
+    idx = pd.DatetimeIndex(["2024-07-01", "2024-07-08"])
+    assert _expected_sessions("weekly", idx) is None
+
+
+def test_slice_sessions_restricts_to_frame_span() -> None:
+    master = pd.DatetimeIndex(pd.bdate_range("2024-06-01", "2024-06-30"))
+    out = _slice_sessions(master, pd.DatetimeIndex(["2024-06-10", "2024-06-20"]))
+    assert out is not None
+    assert out[0] >= pd.Timestamp("2024-06-10") and out[-1] <= pd.Timestamp("2024-06-20")
 
 
 def test_drop_incomplete_last_bar_removes_partial() -> None:
