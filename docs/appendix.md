@@ -309,6 +309,20 @@ version. Think of it as a README for the *domain*, not the code.
   `tests/test_notify.py`): scanner builds the NEW/FAILED summary, suppresses empty runs, and
   fires the webhook (cold start = condensed). `FUTURE` (Telegram, chart-image previews).
 
+### Agent Reviewer
+- **Plain meaning:** An automated, objective second opinion on a flagged setup — proactive
+  due diligence, not a chat window you have to prompt.
+- **How it's implemented here:** `review.review_candidates` runs at scan time on NEWLY-flagged
+  cards, builds a compact evidence prompt from the normalized card (strategy-agnostic), and a
+  pluggable `Reviewer` (`AnthropicReviewer`, REST via `requests`, no SDK dep) returns a
+  `Verdict: aligned/mixed/skeptical` + assessment + concerns. Baked into the dashboard (text
+  only, never HTML-injected). Never gives trading advice. Cost-bounded: off by default,
+  NEW-only, per-run cap, cheap model, bounded output, cached by `timeframe:ticker`
+  (`reviews.json`); fail-soft on missing key / errors.
+- **Status:** `IMPLEMENTED` (v1, bounded) (`review.py` + `scanner.py`, tested in
+  `tests/test_review.py`). `FUTURE`: tool-using (deeper) agency; multimodal review of the
+  rendered chart image.
+
 ---
 
 ## D. Calibration parameters (the tunables)

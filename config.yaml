@@ -99,6 +99,17 @@ wyckoff:
 scoring:
   watchlist_threshold: 70       # 0-100 final composite; >= this gets written out
 
+# §8.5 Agent reviewer: an objective, proactive due-diligence pass on NEWLY-flagged setups,
+# precomputed at scan time and baked into the dashboard. OFF by default; bounded for cost.
+review:
+  enabled: false                # turn on only once ANTHROPIC_API_KEY (a GitHub Secret) is set
+  provider: anthropic           # v1: anthropic only (REST API via requests; no SDK dependency)
+  model: claude-haiku-4-5-20251001  # cheap; the review reasons over structured evidence
+  api_key_env: ANTHROPIC_API_KEY    # from env/secret, never committed
+  max_tokens: 400               # a review is a short verdict + concerns list, not an essay
+  max_reviews_per_run: 5        # HARD cap on LLM calls per run (top-N NEW candidates by score)
+  only_new: true                # review only NEW transitions; continuing setups reuse the cache
+
 output:
   dir: output
   report_title: "Wyckoff Scan"

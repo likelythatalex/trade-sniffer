@@ -59,6 +59,7 @@ Detail/status per concept lives in `appendix.md`; definitions in `wyckoff_method
 | Item | Status | Detail |
 |---|---|---|
 | **Lightweight Charts annotations** | DONE | Dashboard rebuilt as a single shared annotated chart + ranked candidate list, using TradingView's open-source Lightweight Charts™ fed by OHLCV embedded in the page (no view-time data fetch). Annotations: range high/low band + spring/upthrust marker. Keeps an "open in TradingView" link + attribution. Superseded the display-only embed widget. SPEC §8.1, §12. |
+| **Agent reviewer** | DONE (v1: bounded) | `src/review.py` — proactive, objective due-diligence pass on NEWLY-flagged setups, precomputed at scan time (Anthropic REST via `requests`, no SDK dep), baked into the dashboard. Strategy-agnostic (consumes the card contract), fail-soft, framed as review-aid-not-advice. Cost controls: off by default, NEW-only, per-run cap, cheap model, bounded output, cached by `timeframe:ticker`. Future: tool-using (deeper) agency. SPEC §8.5. |
 | **Discord static chart PNG preview** | TODO | Glanceable image attached to the notification (the dashboard stays the inspection surface). SPEC §12. |
 
 ## Tier 5 — Future phases & architecture

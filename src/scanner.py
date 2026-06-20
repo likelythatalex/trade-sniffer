@@ -34,6 +34,7 @@ from .data import fetch_many, fetch_spy, resolve_exchange
 from .data_quality import QualityReport, clean
 from .features import compute_features
 from .notify import has_transitions, make_notifier
+from .review import review_candidates
 from .report import (
     SIGNALS_COLUMNS,
     append_signals,
@@ -153,6 +154,13 @@ def run_timeframe(
     transitions = classify_transitions(prior_qualifying, set(current_qualifying))
     for row in signal_rows:
         row["transition"] = transitions.get(row["ticker"], "none")
+
+    # Objective due-diligence review of NEWLY-flagged setups (bounded/cached/off by default),
+    # attached to the cards before rendering so it shows on the dashboard.
+    review_candidates(
+        cards, transitions, timeframe, config,
+        today or date.today(), Path(config.output.dir) / "reviews.json",
+    )
 
     summary = {**counts, "skipped_detail": skipped_detail, "errored_detail": errored_detail}
     render_dashboard(cards, timeframe, config, today=today, summary=summary)

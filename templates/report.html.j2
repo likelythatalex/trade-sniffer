@@ -40,6 +40,13 @@
     .subscores span { margin-right: .8rem; }
     .reasons { margin: .4rem 0; padding-left: 1.1rem; font-size: .9rem; }
     .tvlink { font-size: .8rem; }
+    .review { margin: .6rem 0; border: 1px solid var(--line); border-radius: 6px; padding: .6rem .75rem; background: #8881; }
+    .review-text { white-space: pre-wrap; font-size: .9rem; margin-top: .35rem; }
+    .review-meta { font-size: .7rem; opacity: .5; margin-top: .3rem; }
+    .verdict { text-transform: uppercase; font-size: .65rem; padding: .12rem .4rem; border-radius: 4px; background: #8884; }
+    .verdict.aligned { background: #1b5e2099; }
+    .verdict.mixed { background: #8a6d1d99; }
+    .verdict.skeptical { background: #7f1d1d99; }
     #chart { height: 460px; margin-top: .5rem; border: 1px solid var(--line); border-radius: 6px; }
     footer { margin-top: 1.5rem; font-size: .85rem; opacity: .7; }
     .empty { opacity: .6; padding: 2rem 0; }
@@ -88,6 +95,7 @@
       </div>
       <div class="subscores" id="p-subscores"></div>
       <ul class="reasons" id="p-reasons"></ul>
+      <div class="review" id="p-review" hidden></div>
       <a class="tvlink" id="p-tvlink" target="_blank" rel="noopener"></a>
       <div id="chart"></div>
       <p id="p-empty" class="empty" hidden>No candidates flagged this run.</p>
@@ -165,6 +173,31 @@
       document.getElementById("p-subscores").innerHTML =
         Object.entries(c.sub_scores).map(([k, v]) => `<span>${k}: ${v >= 0 ? "+" : ""}${v.toFixed(0)}</span>`).join("");
       document.getElementById("p-reasons").innerHTML = (c.reasons || []).map((r) => `<li>${r}</li>`).join("");
+
+      // Agent review (precomputed). Use textContent for the model output — it's LLM-generated
+      // and this page is public, so never inject it as HTML.
+      const rev = document.getElementById("p-review");
+      rev.innerHTML = "";
+      if (c.review && c.review.text) {
+        rev.hidden = false;
+        const v = c.review.verdict || "n/a";
+        const badge = document.createElement("span");
+        badge.className = "verdict " + v;
+        badge.textContent = "AI due-diligence: " + v;
+        const body = document.createElement("div");
+        body.className = "review-text";
+        body.textContent = c.review.text;
+        rev.appendChild(badge); rev.appendChild(body);
+        if (c.review.model) {
+          const meta = document.createElement("div");
+          meta.className = "review-meta";
+          meta.textContent = "model: " + c.review.model + " · analyst notes for human review, not advice";
+          rev.appendChild(meta);
+        }
+      } else {
+        rev.hidden = true;
+      }
+
       const link = document.getElementById("p-tvlink");
       link.href = "https://www.tradingview.com/chart/?symbol=" + encodeURIComponent(c.symbol || c.ticker);
       link.textContent = "Open " + (c.symbol || c.ticker) + " in TradingView ↗";

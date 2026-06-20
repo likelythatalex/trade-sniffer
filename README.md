@@ -79,6 +79,18 @@ the replay mode scores today's universe, so it carries *survivorship bias* — u
 calibration/iteration, not as an unbiased verdict (the report says so too). See
 [ROADMAP.md](ROADMAP.md) for the unbiased (live-`signals.csv`) Phase 2.
 
+## Agent reviewer (optional, off by default)
+
+A proactive, objective due-diligence pass on **newly-flagged** setups: at scan time it asks an
+LLM for a skeptical second opinion (verdict + concerns) and bakes the notes into the dashboard.
+It reviews the signal, **never gives trading advice**, and is strategy-agnostic.
+
+Enable it in [config.yaml](config.yaml) (`review.enabled: true`) and set the `ANTHROPIC_API_KEY`
+secret. It's **cost-bounded** for the public repo: NEW transitions only, a hard
+`max_reviews_per_run` cap, a cheap model by default (Haiku), bounded output, and a
+`reviews.json` cache (keyed `timeframe:ticker`) so continuing setups and same-day re-runs never
+re-spend. No key or a failed call simply omits the review.
+
 ## Editing the universe
 
 [universe.txt](universe.txt) — one bare ticker per line (no exchange prefix), `#` for comments.
@@ -100,8 +112,9 @@ branch** (served by GitHub Pages — so `main` stays code-only), and notifies Di
 
 - The dashboard is published at **`https://<user>.github.io/trade-sniffer/latest_daily.html`**
   (and `latest_weekly.html`). `signals.csv` and `state.json` accumulate on `gh-pages`.
-- Add one repository **secret** (Settings → Secrets and variables → Actions):
-  `NOTIFY_WEBHOOK_URL` — your Discord webhook. `REPORT_BASE_URL` is set in the workflow to the
+- Add repository **secrets** (Settings → Secrets and variables → Actions):
+  `NOTIFY_WEBHOOK_URL` — your Discord webhook; `ANTHROPIC_API_KEY` — **optional**, only needed
+  if you enable the agent reviewer (see below). `REPORT_BASE_URL` is set in the workflow to the
   Pages URL (so the Discord message links to the live dashboard); no secret needed for it.
 - GitHub Pages requires the repo to be **public** on a free plan (private Pages needs a paid
   plan). `tests.yml` runs the suite on every push/PR.

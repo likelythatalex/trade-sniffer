@@ -108,6 +108,19 @@ class ScoringConfig:
 
 
 @dataclass(frozen=True)
+class ReviewConfig:
+    """Agent-reviewer settings (SPEC §8.5). Off by default; bounded for cost."""
+
+    enabled: bool
+    provider: str
+    model: str
+    api_key_env: str
+    max_tokens: int
+    max_reviews_per_run: int  # hard cap on LLM calls per run
+    only_new: bool            # review only NEW transitions, not still-qualifying ones
+
+
+@dataclass(frozen=True)
 class NotifyConfig:
     enabled: bool
     channel: str
@@ -138,6 +151,7 @@ class Config:
     strategies: dict[str, StrategySpec]
     wyckoff: WyckoffConfig
     scoring: ScoringConfig
+    review: ReviewConfig
     output: OutputConfig
 
 
@@ -205,6 +219,7 @@ def _build_config(raw: dict) -> Config:
     strategies = _require(raw, "strategies", "")
     wyckoff = _require(raw, "wyckoff", "")
     scoring = _require(raw, "scoring", "")
+    review = _require(raw, "review", "")
     output = _require(raw, "output", "")
     notify = _require(output, "notify", "output.")
 
@@ -255,6 +270,15 @@ def _build_config(raw: dict) -> Config:
         scoring=ScoringConfig(
             watchlist_threshold=float(_require(scoring, "watchlist_threshold", "scoring.")),
         ),
+        review=ReviewConfig(
+            enabled=bool(_require(review, "enabled", "review.")),
+            provider=str(_require(review, "provider", "review.")),
+            model=str(_require(review, "model", "review.")),
+            api_key_env=str(_require(review, "api_key_env", "review.")),
+            max_tokens=int(_require(review, "max_tokens", "review.")),
+            max_reviews_per_run=int(_require(review, "max_reviews_per_run", "review.")),
+            only_new=bool(_require(review, "only_new", "review.")),
+        ),
         output=OutputConfig(
             dir=str(_require(output, "dir", "output.")),
             report_title=str(_require(output, "report_title", "output.")),
@@ -296,6 +320,13 @@ def _validate(config: Config) -> None:
     if config.output.notify.channel != "discord":
         raise ConfigError(
             f"notify.channel must be 'discord' in v1 (got '{config.output.notify.channel}')."
+        )
+
+    # v1 reviewer is Anthropic only; a key being unset is NOT an error (reviewer just
+    # skips, like notify) — only an enabled non-anthropic provider is a misconfig.
+    if config.review.enabled and config.review.provider != "anthropic":
+        raise ConfigError(
+            f"review.provider must be 'anthropic' in v1 (got '{config.review.provider}')."
         )
 
     # NOTE: we intentionally do NOT fail on a referenced env var being set-but-empty.

@@ -34,6 +34,7 @@ CARDS = [
         "sub_scores": {"volume_behavior": 80.0, "range_structure": 40.0},
         "reasons": ["spring at support"],
         "chart": _chart(marker={"time": "2024-05-31", "type": "spring"}),
+        "review": {"text": "Verdict: aligned\nClean base.", "verdict": "aligned", "model": "claude-haiku-4-5-20251001"},
     },
     {
         "ticker": "AAPL",
@@ -114,6 +115,7 @@ def test_render_dashboard_writes_files_with_required_content(tmp_path: Path) -> 
     assert "candles" in html and "range_high" in html  # OHLCV + annotation data embedded
     assert "TradingView" in html  # attribution kept visible
     assert "Accumulation" in html and "Distribution" in html
+    assert "Clean base." in html  # the agent review is embedded for display
 
 
 def test_render_dashboard_ranks_within_direction(tmp_path: Path) -> None:

@@ -53,13 +53,16 @@ jobs:
           # signals.csv accumulates; state.json drives dedup/MTF — carry them forward.
           # rm on failure so a failed restore (e.g. first run, no gh-pages) doesn't leave
           # an empty file that breaks loading.
-          git show origin/gh-pages:signals.csv > output/signals.csv 2>/dev/null || rm -f output/signals.csv
-          git show origin/gh-pages:state.json  > output/state.json  2>/dev/null || rm -f output/state.json
+          git show origin/gh-pages:signals.csv  > output/signals.csv  2>/dev/null || rm -f output/signals.csv
+          git show origin/gh-pages:state.json   > output/state.json   2>/dev/null || rm -f output/state.json
+          # reviews.json caches agent reviews (keyed timeframe:ticker) so we never re-spend.
+          git show origin/gh-pages:reviews.json > output/reviews.json 2>/dev/null || rm -f output/reviews.json
 
       - name: Run scanner
         env:
           NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
           REPORT_BASE_URL: https://likelythatalex.github.io/trade-sniffer
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # optional; reviewer skips if unset
         run: python -m src.scanner --timeframe ${{ steps.tf.outputs.value }}
 
       - name: Publish output to gh-pages

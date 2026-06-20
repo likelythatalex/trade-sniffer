@@ -542,6 +542,31 @@ holds the prior run's qualifying set per timeframe):
 - This is the audit trail, the dedup source, and the dataset for future backtesting AND
   cross-strategy correlation analysis (§7 / §6 combiner).
 
+### 8.5 Agent reviewer (`review.py`) — objective due diligence, precomputed
+
+An optional, proactive reviewer that gives an objective second opinion on flagged setups —
+distinct from a chat window: it fires automatically (no human prompt), applies the *same
+skeptical rubric* to every candidate, and emits a structured verdict. It reviews the *signal*
+(score, sub-scores, reason tags, recent price action), not the qualitative chart vision, and
+**never gives trading advice** (analyst notes only — the tool flags candidates, never trades).
+
+- **Precomputed at scan time, not live.** The dashboard is a static gh-pages file, so the
+  scheduled run calls the LLM and bakes the review text into the card. No view-time backend;
+  the API key is a GitHub Secret, never in the page.
+- **Strategy-agnostic.** Consumes the normalized card (the `StrategyResult` contract), so
+  future strategies are reviewed with no changes. v1 reasons over the evidence in the prompt;
+  tool-using (deeper) agency is a future upgrade.
+- **Cost controls (public repo):** off by default (`review.enabled`); reviews **NEW
+  transitions only** (continuing setups reuse the cache); a hard **per-run cap**
+  (`max_reviews_per_run`); a cheap model (`review.model`, default Haiku); bounded output
+  (`max_tokens`) and a compact prompt; reviews cached by `timeframe:ticker` in `reviews.json`
+  (carried on gh-pages) so same-day re-runs and continuing setups never re-spend.
+- **Pluggable + fail-soft** (mirrors `notify.py`): the `Reviewer` interface allows another
+  provider later; no key or a failed call simply omits the review and the run continues.
+- **Provider:** v1 is Anthropic via the REST Messages API (`requests`, no SDK dependency).
+- Output: a `Verdict: aligned|mixed|skeptical` line + a short assessment + a concerns list,
+  rendered as text (never HTML-injected — it's model output on a public page).
+
 ## 9. Scheduling (`.github/workflows/scan.yml`)
 
 - **Daily scan:** cron after US market close (e.g., 22:00 UTC weekdays), accounting for
