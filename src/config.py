@@ -108,6 +108,20 @@ class ScoringConfig:
 
 
 @dataclass(frozen=True)
+class TradePlanConfig:
+    """Trade-planner settings (SPEC §8A.1). Suggested levels + sizing + a management
+    playbook — nothing trades. All values are ``[TUNABLE]`` calibration seeds. Flat for
+    v1 (per-timeframe overrides deferred — sizing is account-level; YAGNI)."""
+
+    account_notional: float  # $ notional used ONLY to scale the suggested size; nothing trades
+    risk_pct: float          # % of notional risked per trade (1% = standard)
+    stop_buffer_pct: float   # % beyond the structural invalidation (spring/upthrust) for the stop
+    breakeven_at_r: float    # management: move stop to entry at +this many R
+    scale_out_pct: float     # management: take this % off at the measured-move target
+    trail_atr_mult: float    # management: trail the remaining runner by this × ATR
+
+
+@dataclass(frozen=True)
 class ReviewConfig:
     """Agent-reviewer settings (SPEC §8.5). Off by default; bounded for cost."""
 
@@ -151,6 +165,7 @@ class Config:
     strategies: dict[str, StrategySpec]
     wyckoff: WyckoffConfig
     scoring: ScoringConfig
+    trade_plan: TradePlanConfig
     review: ReviewConfig
     output: OutputConfig
 
@@ -219,6 +234,7 @@ def _build_config(raw: dict) -> Config:
     strategies = _require(raw, "strategies", "")
     wyckoff = _require(raw, "wyckoff", "")
     scoring = _require(raw, "scoring", "")
+    trade_plan = _require(raw, "trade_plan", "")
     review = _require(raw, "review", "")
     output = _require(raw, "output", "")
     notify = _require(output, "notify", "output.")
@@ -269,6 +285,14 @@ def _build_config(raw: dict) -> Config:
         ),
         scoring=ScoringConfig(
             watchlist_threshold=float(_require(scoring, "watchlist_threshold", "scoring.")),
+        ),
+        trade_plan=TradePlanConfig(
+            account_notional=float(_require(trade_plan, "account_notional", "trade_plan.")),
+            risk_pct=float(_require(trade_plan, "risk_pct", "trade_plan.")),
+            stop_buffer_pct=float(_require(trade_plan, "stop_buffer_pct", "trade_plan.")),
+            breakeven_at_r=float(_require(trade_plan, "breakeven_at_r", "trade_plan.")),
+            scale_out_pct=float(_require(trade_plan, "scale_out_pct", "trade_plan.")),
+            trail_atr_mult=float(_require(trade_plan, "trail_atr_mult", "trade_plan.")),
         ),
         review=ReviewConfig(
             enabled=bool(_require(review, "enabled", "review.")),
@@ -333,6 +357,18 @@ def _validate(config: Config) -> None:
     # GitHub Actions turns an *unset* secret (e.g. an optional REPORT_BASE_URL) into an
     # empty env var, and the runtime already degrades gracefully (notify is skipped when
     # the webhook is empty; the report link is omitted when the base URL is empty).
+
+    # Trade-planner sizing must be sane (SPEC §8A.1): a non-positive notional or risk %
+    # can't scale a position, and a scale-out outside 0-100% is meaningless.
+    tp = config.trade_plan
+    if tp.account_notional <= 0:
+        raise ConfigError(f"trade_plan.account_notional must be > 0 (got {tp.account_notional}).")
+    if not (0 < tp.risk_pct <= 100):
+        raise ConfigError(f"trade_plan.risk_pct must be in (0, 100] (got {tp.risk_pct}).")
+    if tp.stop_buffer_pct < 0:
+        raise ConfigError(f"trade_plan.stop_buffer_pct must be >= 0 (got {tp.stop_buffer_pct}).")
+    if not (0 <= tp.scale_out_pct <= 100):
+        raise ConfigError(f"trade_plan.scale_out_pct must be in [0, 100] (got {tp.scale_out_pct}).")
 
     # Wyckoff sub-score weights must sum to 100 (they form a 0-100 composite).
     total = sum(config.wyckoff.sub_weights.values())

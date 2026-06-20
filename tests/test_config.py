@@ -137,6 +137,18 @@ def test_unset_env_var_is_allowed(
     assert cfg.output.notify.webhook_url_env == "NOTIFY_WEBHOOK_URL"
 
 
+def test_trade_plan_rejects_nonpositive_risk_pct(raw_config: dict, tmp_path: Path) -> None:
+    raw_config["trade_plan"]["risk_pct"] = 0  # can't size a position risking 0%
+    with pytest.raises(ConfigError, match="risk_pct"):
+        config.load_config(write_config(tmp_path, raw_config))
+
+
+def test_trade_plan_rejects_bad_scale_out(raw_config: dict, tmp_path: Path) -> None:
+    raw_config["trade_plan"]["scale_out_pct"] = 150  # a >100% scale-out is meaningless
+    with pytest.raises(ConfigError, match="scale_out_pct"):
+        config.load_config(write_config(tmp_path, raw_config))
+
+
 def test_missing_required_key_rejected(raw_config: dict, tmp_path: Path) -> None:
     del raw_config["timeframes"]
     with pytest.raises(ConfigError, match="timeframes"):

@@ -99,6 +99,17 @@ wyckoff:
 scoring:
   watchlist_threshold: 70       # 0-100 final composite; >= this gets written out
 
+# §8A.1 Trade planner: turns a flagged signal into a SUGGESTED plan (entry/stop/target/size
+# + a management playbook). NEVER trades. All values are [TUNABLE] calibration seeds.
+trade_plan:
+  account_notional: 100000      # $ notional used ONLY to scale the suggested size; nothing trades
+  risk_pct: 1.0                 # [TUNABLE] % of notional risked per trade (1% = standard)
+  stop_buffer_pct: 0.5          # [TUNABLE] % beyond the structural invalidation (spring/upthrust)
+  # management playbook — rules written into the plan, NEVER auto-executed:
+  breakeven_at_r: 1.0           # [TUNABLE] move stop to entry once price reaches +this many R
+  scale_out_pct: 50             # [TUNABLE] take this % off at the measured-move target
+  trail_atr_mult: 2.0           # [TUNABLE] trail the remaining runner by this × ATR
+
 # §8.5 Agent reviewer: an objective, proactive due-diligence pass on NEWLY-flagged setups,
 # precomputed at scan time and baked into the dashboard. OFF by default; bounded for cost.
 review:

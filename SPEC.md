@@ -582,8 +582,11 @@ the planner reads `levels`, never Wyckoff internals — that's what keeps it str
 ### 8A.1 Trade planner (`trade_plan.py`, pure, public)
 
 Consumes a `StrategyResult` → a `TradePlan` dataclass (entry, stop, target, reward:risk,
-size, management rules). All numbers are `[TUNABLE]` per-timeframe seeds in a `trade_plan:`
-config block, same convention as the Wyckoff params.
+size, management rules). All numbers are `[TUNABLE]` seeds in a flat `trade_plan:` config
+block (per-timeframe overrides deferred — sizing is account-level and the buffer/playbook
+start global; add the split when calibration shows daily ≠ weekly). The planner is **pure**
+on `(direction, levels, config)` and **abstains** (`None`) on a degenerate setup rather than
+raising — the same fail-soft contract as the rest of the pipeline.
 
 - **Entry:** confirmation break of the range edge in the signal's direction.
 - **Stop:** structural invalidation (spring low / upthrust high) + an ATR/% buffer.
