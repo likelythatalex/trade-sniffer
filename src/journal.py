@@ -31,6 +31,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_JOURNAL_PATH = Path("journal.csv")  # repo root, gitignored (never committed/published)
 TRADE_REVIEWS_PATH = Path("trade_reviews.json")  # gitignored cache of post-trade reflections
+DEFAULT_HTML_PATH = Path("journal_report.html")  # gitignored private view (Phase A)
+_TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
+_JOURNAL_TEMPLATE = "journal.html.j2"
 
 # The post-trade reflection rubric — distinct from the signal reviewer's (review.SYSTEM_PROMPT).
 # It judges PROCESS separately from OUTCOME (a good process can lose; a bad one can win).
@@ -284,6 +287,74 @@ def _actual_realized_r(entry: dict[str, Any]) -> float | None:
     return move / risk
 
 
+# --- private HTML view (Phase A; read-only, local-only) ------------------------
+
+
+def render_journal_html(
+    entries_with_outcomes: list[tuple[dict[str, Any], TradeOutcome | None]],
+    reviews: dict[str, Any],
+    out_path: Path = DEFAULT_HTML_PATH,
+) -> Path:
+    """Render the private journal page (trades + outcomes + reflections + summary) to a
+    gitignored HTML file. Pure-ish: data in, file out (no fetch) — easy to test. Autoescape
+    is on, so trader notes + LLM text are escaped. PRIVATE: never published."""
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+    rows = _journal_view(entries_with_outcomes, reviews)
+    environment = Environment(
+        loader=FileSystemLoader(str(_TEMPLATE_DIR)),
+        autoescape=select_autoescape(["html", "j2"]),
+    )
+    html = environment.get_template(_JOURNAL_TEMPLATE).render(
+        rows=rows, summary=_journal_summary(rows), generated=date.today().isoformat()
+    )
+    out_path = Path(out_path)
+    out_path.write_text(html, encoding="utf-8")
+    return out_path
+
+
+def _journal_view(
+    entries_with_outcomes: list[tuple[dict[str, Any], TradeOutcome | None]], reviews: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Flatten each (entry, outcome) + its cached reflection into a template row."""
+    rows: list[dict[str, Any]] = []
+    for entry, outcome in entries_with_outcomes:
+        actual = _actual_realized_r(entry)
+        rows.append({
+            "id": entry["id"], "ticker": entry["ticker"], "direction": entry["direction"],
+            "opened_date": entry["opened_date"], "status": entry.get("status", "open"),
+            "entry": entry["entry"], "stop": entry["stop"], "target": entry["target"], "size": entry["size"],
+            "source": entry.get("source", ""), "notes": entry.get("notes", ""),
+            "exit_price": entry.get("exit_price", ""), "exit_date": entry.get("exit_date", ""),
+            "actual_r": None if actual is None else round(actual, 2),
+            "outcome": None if outcome is None else {
+                "resolution": outcome.resolution, "realized_r": outcome.realized_r,
+                "mfe_r": round(outcome.mfe_r, 2), "mae_r": round(outcome.mae_r, 2),
+                "bars_held": outcome.bars_held,
+            },
+            "review": reviews.get(str(entry["id"])),
+        })
+    return rows
+
+
+def _journal_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate stats over CLOSED trades' actual realized R (the real result, not the plan)."""
+    closed = [r for r in rows if r["status"] == "closed" and r["actual_r"] is not None]
+    n = len(closed)
+    wins = sum(1 for r in closed if r["actual_r"] > 0)
+    total_r = sum(r["actual_r"] for r in closed)
+    return {
+        "total": len(rows),
+        "open": sum(1 for r in rows if r["status"] == "open"),
+        "closed": n,
+        "wins": wins,
+        "losses": n - wins,
+        "win_rate": round(100 * wins / n, 1) if n else None,
+        "total_r": round(total_r, 2) if n else None,
+        "avg_r": round(total_r / n, 2) if n else None,
+    }
+
+
 # --- CLI (local, manual) ------------------------------------------------------
 
 
@@ -333,6 +404,7 @@ def main(argv: list[str] | None = None) -> None:
 
     sub.add_parser("report", help="evaluate each trade's outcome vs price history (fetches data)")
     sub.add_parser("review", help="private post-trade reflection on closed trades (needs API key)")
+    sub.add_parser("html", help="render the private journal view to a local HTML file")
 
     args = parser.parse_args(argv)
     path = Path(args.file)
@@ -359,6 +431,8 @@ def main(argv: list[str] | None = None) -> None:
             _run_report(path)
         elif args.command == "review":
             _run_review(path)
+        elif args.command == "html":
+            _run_html(path)
     except JournalError as exc:
         parser.error(str(exc))
 
@@ -421,6 +495,28 @@ def _run_review(path: Path) -> None:
         review = cache.get(str(entry["id"]))
         if review:
             print(f"#{entry['id']} {entry['ticker']} [{review.get('verdict', 'n/a')}]\n{review.get('text', '')}\n")
+
+
+def _run_html(path: Path) -> None:
+    """Render the private journal page. Fetches daily prices best-effort for outcomes (degrades
+    to blank outcomes if offline), loads cached reflections, writes the gitignored HTML."""
+    entries = load_entries(path)
+    prices: dict[str, pd.DataFrame] = {}
+    try:
+        from .config import load_config
+        from .data import fetch_many
+
+        tickers = sorted({e["ticker"] for e in entries})
+        if tickers:
+            fetched = fetch_many(tickers, "daily", load_config())
+            prices = {ticker: result.df for ticker, result in fetched.items()}
+    except Exception:  # best-effort: a fetch failure just leaves outcomes blank, page still renders
+        logger.warning("price fetch failed; journal page will show blank outcomes")
+
+    paired = evaluate_entries(entries, prices)
+    reviews = load_reviews(TRADE_REVIEWS_PATH)
+    out = render_journal_html(paired, reviews, DEFAULT_HTML_PATH)
+    print(f"wrote {out}  (PRIVATE — local only, gitignored)")
 
 
 if __name__ == "__main__":

@@ -629,6 +629,11 @@ private-journal split.
   reviewer = private, on closed trades. Same interface, different prompt.
 - **Privacy enforcement:** `.gitignore` covers `journal.csv`, journal outputs, and post-trade
   reviews; the published report never renders the journal.
+- **Private view (Phase A):** `journal html` renders the journal + outcomes + reflections +
+  summary to a gitignored `journal_report.html` for local viewing (host privately over
+  Tailscale; no backend). The static-vs-backend hosting plan is in ROADMAP "Hosting & UI
+  evolution" — a backend is only needed for *view-time* mutation/compute, and stays a
+  packaging change over these pure functions, not a rewrite.
 
 ### 8A.3 Disclaimer
 

@@ -82,6 +82,24 @@ reflect` — now closed end to end. All steps tested + green; built incrementall
 | 5. Journal auto-outcome | DONE | Shared pure `trade_outcome.py` (path-dependent: stop-vs-target-first, realized R, MFE/MAE; conservative both-in-one-bar tie-break, forward-bars-only). `journal evaluate_entries` (prices injected) + `journal report` CLI (fetches daily). Outcomes derived, not stored. Same evaluator the Tier-3 policy sweep will reuse. SPEC §8A.2. |
 | 6. Post-trade agent review (PRIVATE) | DONE | `journal review`: reuses `AnthropicReviewer` with a reflection rubric (judges PROCESS vs OUTCOME; verdict good/mixed/poor) on CLOSED trades. `review_closed_trades` (stub-injected) is closed-only, per-run capped, cached in gitignored `trade_reviews.json`; needs the API key (no enabled gate — explicit command), fail-soft, never advice. SPEC §8A.2. |
 
+## Hosting & UI evolution (phased)
+
+Two orthogonal axes decide this: **public vs private** (the journal is private trades → can't
+live on the public gh-pages) and **static vs dynamic** (a backend is only needed for
+*view-time* compute/mutation). Most "more features" wants need **private hosting, not a
+backend**. The codebase is structured (pure functions, per-concern CLIs, `Strategy`/`Reviewer`
+seams, separate templates) so the eventual backend is a **packaging change, not a rewrite** —
+routes just call the existing functions.
+
+| Phase | Status | What | Trigger to start |
+|---|---|---|---|
+| A. Private read-only journal view | DONE | `journal html` renders trades + outcomes + reflections + summary stats to a gitignored `journal_report.html`. Host privately by running it locally and reaching it over **Tailscale** (zero-cost, nothing public, tailnet = auth). | wanting to glance at the journal away from the desk |
+| B. Small web app (the backend step) | TODO | FastAPI/Flask wrapping the existing functions: dashboard + journal CRUD + on-demand scan; SQLite for journal/signals; simple auth. Host on Fly.io/Render/$5 VPS — or still local behind Tailscale/Cloudflare Tunnel to stay free + private. | a CONCRETE need: add/close trades from phone, on-demand re-scan, or `signals.csv` outgrowing a flat file |
+| C. Scale | TODO | Postgres, background workers (heavy backtests / policy sweeps), multi-device. | only if B strains |
+
+Keep the **scanner** static + public (gh-pages) — it's the correct design for it. Don't build
+B speculatively; name the trigger first (YAGNI).
+
 ## Tier 5 — Future phases & architecture
 
 Bigger directions, all with design rationale in **SPEC §12** — see there for the "why". Listed
@@ -98,4 +116,4 @@ here only for visibility/sequencing.
 | Climax-anchored range boundaries | TODO | Refinement over the v1 support/resistance band. SPEC §12; methodology §2.3/§3. |
 | Paid data source (Polygon) | TODO | If intraday / higher quality is ever needed. SPEC §12. |
 | IBKR optional output | TODO | For users keeping TWS running. SPEC §12. |
-| Hosted multi-tool dashboard / orchestrator | TODO (trigger-based) | Today the static gh-pages + GitHub Actions model *is* the orchestrator. Revisit a small web app + scheduler (and maybe a DB / VPS) when a **view-time backend** is needed (in-browser agent, on-demand re-scan, filtering), **intraday scheduling**, a **real DB** (signals outgrow CSV+partitioning), or **heavy/long compute** (big backtests). Pure functions + per-concern CLIs + the `Strategy` interface make this a packaging change, not a rewrite — worth a focused planning session when a trigger fires. |
+| Hosted multi-tool dashboard / orchestrator | TODO (trigger-based) | Phased plan lives in **Hosting & UI evolution** above (Phase A done; B = the backend step, trigger-gated). The static gh-pages + GitHub Actions model is the orchestrator until a concrete trigger fires. |

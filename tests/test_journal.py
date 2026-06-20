@@ -19,6 +19,7 @@ from src.journal import (
     evaluate_entries,
     list_trades,
     load_entries,
+    render_journal_html,
     review_closed_trades,
 )
 from src.review import Reviewer
@@ -188,6 +189,31 @@ def test_build_trade_review_prompt_includes_evidence() -> None:
     assert "planned R:R" in prompt
     assert "actual" in prompt and "+0.89R" in prompt  # (118-110)/9 from the recorded exit
     assert "stop after 4 bars" in prompt
+
+
+def test_render_journal_html_contains_trade_outcome_and_review(tmp_path: Path) -> None:
+    outcome = TradeOutcome(resolution="target", realized_r=1.11, mfe_r=1.3, mae_r=0.4, bars_held=6)
+    reviews = {"1": {"text": "Process: good\nClean execution.", "verdict": "good"}}
+    out = render_journal_html([(_closed("XOM", 1), outcome)], reviews, tmp_path / "j.html")
+    html = out.read_text(encoding="utf-8")
+    assert "XOM" in html and "PRIVATE" in html  # private banner present
+    assert "+0.89R" in html                      # actual realized R: (118-110)/9 from recorded exit
+    assert "target after 6 bars" in html         # path outcome
+    assert "Clean execution." in html and "process: good" in html  # reflection rendered
+
+
+def test_render_journal_html_summary_excludes_open_from_win_rate(tmp_path: Path) -> None:
+    win = _closed("AAA", 1)                                    # exit 118 -> +0.89R (win)
+    loss = {**_closed("BBB", 2), "exit_price": "104"}          # exit 104 -> -0.67R (loss)
+    open_trade = {**_closed("CCC", 3), "status": "open", "exit_price": ""}
+    out = render_journal_html([(win, None), (loss, None), (open_trade, None)], {}, tmp_path / "j.html")
+    html = out.read_text(encoding="utf-8")
+    assert "50.0%" in html  # 2 closed, 1 win -> 50% (the open trade is excluded)
+
+
+def test_render_journal_html_empty(tmp_path: Path) -> None:
+    out = render_journal_html([], {}, tmp_path / "j.html")
+    assert "No trades yet" in out.read_text(encoding="utf-8")
 
 
 def test_round_trip_preserves_fields(tmp_path: Path) -> None:

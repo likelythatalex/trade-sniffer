@@ -113,7 +113,14 @@ python -m src.journal list --status open
 python -m src.journal close 1 64.10 --notes "hit target"
 python -m src.journal report     # outcome of each trade vs price history (stop/target-first, realized R, MFE/MAE)
 python -m src.journal review     # private post-trade reflection on closed trades (needs ANTHROPIC_API_KEY)
+python -m src.journal html       # render a private journal page (gitignored journal_report.html)
 ```
+
+`html` writes a local, **gitignored** `journal_report.html` (trades + outcomes + reflections +
+win-rate/expectancy summary). To view it away from your desk *without* exposing trades, run it
+locally and reach the file over [Tailscale](https://tailscale.com) — no public hosting, no
+backend. The fuller hosting path (a small web app, only when you need view-time interaction)
+is the phased plan in [ROADMAP.md](ROADMAP.md) → "Hosting & UI evolution".
 
 `review` reuses the agent reviewer with a reflection rubric that judges **process vs outcome**
 (a good process can lose, a bad one can win); it's capped, cached (gitignored

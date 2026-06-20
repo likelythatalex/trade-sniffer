@@ -1,0 +1,85 @@
+{# Private trade journal view (SPEC §8A, Phase A) — read-only, single file, no build step.
+   PRIVATE: rendered locally to a gitignored file; never published. Autoescape is on, so
+   trader notes + LLM reflection text are escaped. No charts in v1 (KISS). #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trade Journal (private)</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0e1117; --fg:#e6e6e6; --line:#8884; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 1.5rem; background: var(--bg); color: var(--fg); }
+    h1 { margin: 0 0 .25rem; }
+    .private { color: #ffb454; font-size: .85rem; margin: 0 0 1rem; }
+    .stats { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem; }
+    .stat { border: 1px solid var(--line); border-radius: 6px; padding: .5rem .8rem; min-width: 6rem; }
+    .stat span { display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; opacity: .6; }
+    .stat b { font-size: 1.2rem; }
+    .trade { border: 1px solid var(--line); border-radius: 8px; padding: .7rem .9rem; margin: .6rem 0; }
+    .trade.closed { opacity: .92; }
+    .thead { display: flex; gap: .6rem; align-items: baseline; }
+    .thead .tkr { font-weight: 700; }
+    .dir { text-transform: uppercase; font-size: .62rem; padding: .1rem .35rem; border-radius: 4px; }
+    .dir.long { background: #1b5e2099; }
+    .dir.short { background: #7f1d1d99; }
+    .status { font-size: .7rem; opacity: .6; text-transform: uppercase; }
+    .r { margin-left: auto; font-weight: 700; }
+    .r.win { color: #4caf80; }
+    .r.loss { color: #ef5350; }
+    .plan, .exit, .outcome, .notes { font-size: .85rem; margin-top: .3rem; opacity: .9; }
+    .outcome { opacity: .75; }
+    .notes { font-style: italic; opacity: .8; }
+    .review { margin-top: .5rem; border: 1px solid var(--line); border-radius: 6px; padding: .5rem .7rem; background: #8881; }
+    .verdict { text-transform: uppercase; font-size: .65rem; padding: .12rem .4rem; border-radius: 4px; background: #8884; }
+    .verdict.good { background: #1b5e2099; }
+    .verdict.mixed { background: #8a6d1d99; }
+    .verdict.poor { background: #7f1d1d99; }
+    .rtext { white-space: pre-wrap; font-size: .85rem; margin-top: .35rem; }
+    .empty { opacity: .6; padding: 2rem 0; }
+    footer { margin-top: 1.5rem; font-size: .8rem; opacity: .55; }
+    code { background: #8882; padding: .05rem .3rem; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Trade Journal</h1>
+    <p class="private">⚠ PRIVATE — local only, gitignored, never published. Generated {{ generated }}.</p>
+  </header>
+
+  <section class="stats">
+    <div class="stat"><span>Trades</span><b>{{ summary.total }}</b></div>
+    <div class="stat"><span>Open</span><b>{{ summary.open }}</b></div>
+    <div class="stat"><span>Closed</span><b>{{ summary.closed }}</b></div>
+    <div class="stat"><span>Win rate</span><b>{% if summary.win_rate is not none %}{{ summary.win_rate }}%{% else %}—{% endif %}</b></div>
+    <div class="stat"><span>Total R</span><b>{% if summary.total_r is not none %}{{ '%+.2f'|format(summary.total_r) }}{% else %}—{% endif %}</b></div>
+    <div class="stat"><span>Avg R</span><b>{% if summary.avg_r is not none %}{{ '%+.2f'|format(summary.avg_r) }}{% else %}—{% endif %}</b></div>
+  </section>
+
+  {% for r in rows %}
+  <article class="trade {{ r.status }}">
+    <div class="thead">
+      <span class="tkr">#{{ r.id }} {{ r.ticker }}</span>
+      <span class="dir {{ r.direction }}">{{ r.direction }}</span>
+      <span class="status">{{ r.status }}</span>
+      {% if r.actual_r is not none %}<span class="r {{ 'win' if r.actual_r > 0 else 'loss' }}">{{ '%+.2f'|format(r.actual_r) }}R</span>{% endif %}
+    </div>
+    <div class="plan">opened {{ r.opened_date }} · entry {{ r.entry }} · stop {{ r.stop }} · target {{ r.target }} · size {{ r.size }}{% if r.source %} · {{ r.source }}{% endif %}</div>
+    {% if r.status == 'closed' %}<div class="exit">exit {{ r.exit_price }} on {{ r.exit_date }}</div>{% endif %}
+    {% if r.outcome %}<div class="outcome">price path: {{ r.outcome.resolution }} after {{ r.outcome.bars_held }} bars{% if r.outcome.realized_r is not none %} · plan {{ '%+.2f'|format(r.outcome.realized_r) }}R{% endif %} · MFE {{ '%.2f'|format(r.outcome.mfe_r) }}R · MAE {{ '%.2f'|format(r.outcome.mae_r) }}R</div>{% endif %}
+    {% if r.notes %}<div class="notes">{{ r.notes }}</div>{% endif %}
+    {% if r.review %}
+    <div class="review">
+      <span class="verdict {{ r.review.verdict }}">process: {{ r.review.verdict }}</span>
+      <div class="rtext">{{ r.review.text }}</div>
+    </div>
+    {% endif %}
+  </article>
+  {% else %}
+  <p class="empty">No trades yet. Add one with <code>python -m src.journal add …</code></p>
+  {% endfor %}
+
+  <footer>Private reflection — not financial advice. Flags/records candidates for review; never auto-traded.</footer>
+</body>
+</html>
