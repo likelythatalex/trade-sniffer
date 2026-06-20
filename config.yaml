@@ -102,7 +102,7 @@ scoring:
 # §8.5 Agent reviewer: an objective, proactive due-diligence pass on NEWLY-flagged setups,
 # precomputed at scan time and baked into the dashboard. OFF by default; bounded for cost.
 review:
-  enabled: false                # turn on only once ANTHROPIC_API_KEY (a GitHub Secret) is set
+  enabled: true                # turn on only once ANTHROPIC_API_KEY (a GitHub Secret) is set
   provider: anthropic           # v1: anthropic only (REST API via requests; no SDK dependency)
   model: claude-haiku-4-5-20251001  # cheap; the review reasons over structured evidence
   api_key_env: ANTHROPIC_API_KEY    # from env/secret, never committed
