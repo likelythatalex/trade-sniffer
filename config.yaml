@@ -108,8 +108,10 @@ review:
   api_key_env: ANTHROPIC_API_KEY    # from env/secret, never committed
   max_tokens: 600               # a review is a short verdict + concerns list, not an essay
                                 # (400 truncated Haiku mid-bullet; 600 leaves headroom to finish)
-  max_reviews_per_run: 5        # HARD cap on LLM calls per run (top-N NEW candidates by score)
-  only_new: true                # review only NEW transitions; continuing setups reuse the cache
+  max_reviews_per_run: 10       # TEMP backfill: raised to seed all current qualifiers once;
+                                # reverts to 3 (steady state) right after the seed run
+  only_new: false               # TEMP backfill: review continuing qualifiers too, just this run;
+                                # reverts to true (review only NEW transitions) after seeding
 
 output:
   dir: output
