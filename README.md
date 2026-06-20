@@ -10,6 +10,14 @@ Design details live in [SPEC.md](SPEC.md); working agreements in [CLAUDE.md](CLA
 concepts + implementation status in [docs/appendix.md](docs/appendix.md); what's next + the
 prioritized backlog in [ROADMAP.md](ROADMAP.md).
 
+## ⚠️ Disclaimer
+
+A personal, educational project, provided **as-is with no warranty**. It is **not financial
+advice**, and nothing it outputs is a recommendation to buy or sell anything. It **finds and
+flags candidates for human review — it never places trades.** Signals can be wrong, backtests
+carry their own biases, and markets do what they want. Do your own research; trade your own
+money at your own risk.
+
 ## Setup
 
 Python 3.13 (3.11+ works). From the repo root:

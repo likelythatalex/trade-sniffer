@@ -567,6 +567,62 @@ skeptical rubric* to every candidate, and emits a structured verdict. It reviews
 - Output: a `Verdict: aligned|mixed|skeptical` line + a short assessment + a concerns list,
   rendered as text (never HTML-injected — it's model output on a public page).
 
+## 8A. Trade layer — planner + local journal (planned; not yet built)
+
+**Framing:** *signal* and *trade* are different jobs. The strategy says **what / which
+direction**; the trade layer says **where to enter, where to exit, how much, and how it
+went**. It is a **second seam parallel to `Strategy`** — signal-agnostic by construction, so
+any future strategy that emits a direction + structural levels gets trade plans for free.
+**Still never trades** — this is planning + journaling only (no broker, ever).
+
+**Interface touch-point:** `StrategyResult` gains a typed `levels` (range high/low, entry
+reference, invalidation/stop reference, target reference). Strategies populate what they know;
+the planner reads `levels`, never Wyckoff internals — that's what keeps it strategy-agnostic.
+
+### 8A.1 Trade planner (`trade_plan.py`, pure, public)
+
+Consumes a `StrategyResult` → a `TradePlan` dataclass (entry, stop, target, reward:risk,
+size, management rules). All numbers are `[TUNABLE]` per-timeframe seeds in a `trade_plan:`
+config block, same convention as the Wyckoff params.
+
+- **Entry:** confirmation break of the range edge in the signal's direction.
+- **Stop:** structural invalidation (spring low / upthrust high) + an ATR/% buffer.
+- **Target:** measured move (range height projected from the break).
+- **Sizing:** account-risk % — `size = (account_notional × risk_pct) / stop_distance`.
+  Defaults **1% on a $100k notional** (notional only scales the displayed size; nothing trades).
+- **Management** (a written playbook baked into the plan, not executed): breakeven at +1R;
+  scale 50% at target; trail the remainder by N×ATR.
+- **Display:** rendered on each dashboard card; entry/stop/target drawn as `createPriceLine`
+  on the existing Lightweight Charts chart. Public — derived from public price + levels, no
+  personal data.
+
+### 8A.2 Local trade journal (`journal.py` + CLI) — PRIVATE, local-only
+
+The repo and gh-pages are **public**, so intended trades must never touch either. The journal
+is therefore **gitignored, never committed, never published**, and runs **only locally /
+manually** — never in CI (CI output is public by definition). This is a clean public-scanner /
+private-journal split.
+
+- **Record:** `python -m src.journal add …` (or edit `journal.csv`): ticker, timeframe,
+  direction, entry, stop, target, size, opened date, source signal; status open/closed, exit,
+  exit date.
+- **Auto-outcome:** reuse `outcomes.py` over price history — which level hit first (stop vs
+  target), realized R, MFE/MAE. Same machinery as the backtest; the journal is the *real-trade*
+  dataset alongside `signals.csv`.
+- **Post-trade agent review (private):** reuse the `Reviewer` ABC (§8.5) with a *reflection*
+  system prompt — "how did this closed trade go, what worked / didn't, the lesson." Sends
+  trade details to the Anthropic API from your machine (a private call, but it does leave the
+  machine — acknowledged). **Symmetry:** pre-trade reviewer = public, on signals; post-trade
+  reviewer = private, on closed trades. Same interface, different prompt.
+- **Privacy enforcement:** `.gitignore` covers `journal.csv`, journal outputs, and post-trade
+  reviews; the published report never renders the journal.
+
+### 8A.3 Disclaimer
+
+A short, informal disclaimer in the README **and** the dashboard footer: educational/personal
+project, **not financial advice**, flags candidates only (never trades), no warranty, signals
+can be wrong, do your own research.
+
 ## 9. Scheduling (`.github/workflows/scan.yml`)
 
 - **Daily scan:** cron after US market close (e.g., 22:00 UTC weekdays), accounting for

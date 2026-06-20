@@ -32,6 +32,14 @@ data_cache/
 # --- Backtest results (offline analysis tool; not part of the published scan) ---
 backtest_results/
 
+# --- Private trade journal (LOCAL ONLY — never committed, never published) ---
+# The repo and gh-pages are PUBLIC; intended trades and their post-trade reviews stay on
+# your machine. The journal runs locally/manually only, never in CI. See SPEC §8A.2.
+journal.csv
+journal_*.csv
+journal_report*.html
+trade_reviews.json
+
 # --- IDE / editor ---
 .vscode/
 .idea/

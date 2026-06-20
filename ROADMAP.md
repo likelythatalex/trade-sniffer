@@ -53,6 +53,7 @@ Detail/status per concept lives in `appendix.md`; definitions in `wyckoff_method
 |---|---|---|
 | **Backtesting harness** | DONE (Phase 1: replay) | `src/backtest/` (own CLI, off the cron path). Re-scores history with the production pipeline as-of each bar, computes forward + excess-vs-SPY returns, and reports IC / by-bucket returns / hit-rate lift / per-sub-score IC. **Replay carries survivorship bias** (caveated in every report); MTF not replayed. Phase 2 (unbiased) = run the same `outcomes`/`metrics` over accumulated live `signals.csv` once it grows. SPEC §12. |
 | **Calibrate seed thresholds & weights** | TODO (unblocked) | Tune the `[TUNABLE]` params using the backtester's IC / sub-score-IC / bucket monotonicity. appendix §D lists every tunable; methodology has the `[VERIFY]`/`[TUNABLE]` stubs. Best done once more live data accrues (replay is biased). |
+| **Failed→revived event study (MFE)** | TODO (data-gated) | Path-dependent question: did setups that *failed then re-qualified* eventually fulfil? Needs an MFE / time-to-target outcome metric — fixed-horizon IC can't see a dip-then-trigger. **Reconstructable offline from existing `transition` + `run_ts`; no schema change.** Separate analysis from the core IC harness. Don't condition the core backtest on `transition` (selection bias). |
 
 ## Tier 4 — Outputs & UX
 
@@ -61,6 +62,24 @@ Detail/status per concept lives in `appendix.md`; definitions in `wyckoff_method
 | **Lightweight Charts annotations** | DONE | Dashboard rebuilt as a single shared annotated chart + ranked candidate list, using TradingView's open-source Lightweight Charts™ fed by OHLCV embedded in the page (no view-time data fetch). Annotations: range high/low band + spring/upthrust marker. Keeps an "open in TradingView" link + attribution. Superseded the display-only embed widget. SPEC §8.1, §12. |
 | **Agent reviewer** | DONE (v1: bounded) | `src/review.py` — proactive, objective due-diligence pass on NEWLY-flagged setups, precomputed at scan time (Anthropic REST via `requests`, no SDK dep), baked into the dashboard. Strategy-agnostic (consumes the card contract), fail-soft, framed as review-aid-not-advice. Cost controls: off by default, NEW-only, per-run cap, cheap model, bounded output, cached by `timeframe:ticker`. Future: tool-using (deeper) agency. SPEC §8.5. |
 | **Discord static chart PNG preview** | TODO | Glanceable image attached to the notification (the dashboard stays the inspection surface). SPEC §12. |
+| **Dashboard: toggle to view recently failed setups** | TODO | Review/reflect affordance — show recently *invalidated* setups, not just current qualifiers. Scanner already classifies `failed`; surface those cards behind a UI toggle. Optionally feed the reviewer the setup's `transition`/episode history so a re-flagged setup is reviewed in context (the agent currently sees only the as-of snapshot). |
+
+## Active build — Trade layer (planner + local journal)
+
+The current focus. A second seam parallel to `Strategy` (signal-agnostic): turn a signal into
+an actionable but **never-executed** plan, journal the trades you'd take (locally/privately),
+and reflect on closed ones. Design + decisions: **SPEC §8A**. Loop: `signal → plan → journal
+→ outcome → reflect`. Built incrementally, each step tested + green before the next.
+
+| Step | Status | Detail |
+|---|---|---|
+| 0. Disclaimer + privacy scaffolding | DONE | README + dashboard-footer disclaimer; `.gitignore` covers the private journal so trades can never leak to the public repo/gh-pages. |
+| 1. Formalize `StrategyResult.levels` | TODO | Typed structural levels (range high/low, entry/stop/target refs); wyckoff populates them. Keeps the planner strategy-agnostic. |
+| 2. `trade_plan.py` (pure, public) | TODO | `TradePlan` + planner: entry (confirmation break), stop (structural + ATR/% buffer), target (measured move), sizing (account-risk %, 1%/$100k notional), management rules (BE@+1R, scale 50% @ target, trail N×ATR). All `[TUNABLE]` per timeframe. |
+| 3. Dashboard render of the plan | TODO | Plan on each card + entry/stop/target as price lines on the existing chart. Public (no personal data). |
+| 4. `journal.py` + CLI (PRIVATE) | TODO | Local-only, gitignored, never in CI. Record intended trades (`python -m src.journal add …`). |
+| 5. Journal auto-outcome | TODO | Reuse `outcomes.py`: which level hit first, realized R, MFE/MAE. The real-trade dataset. |
+| 6. Post-trade agent review (PRIVATE) | TODO | Reuse the `Reviewer` ABC with a reflection prompt; runs locally; sends trade detail to the API from your machine only. |
 
 ## Tier 5 — Future phases & architecture
 
