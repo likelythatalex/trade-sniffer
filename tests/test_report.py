@@ -84,6 +84,29 @@ def test_append_signals_writes_header_once(tmp_path: Path) -> None:
     assert rows[0].count("ticker") == 1
 
 
+def test_append_signals_migrates_older_schema(tmp_path: Path) -> None:
+    # An existing log written before close/volume existed must be upgraded in place,
+    # not corrupted: old rows keep their data, new columns back-fill blank, header aligns.
+    path = tmp_path / "signals.csv"
+    old_cols = [c for c in report.SIGNALS_COLUMNS if c not in ("close", "volume")]
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=old_cols)
+        writer.writeheader()
+        writer.writerow({**{c: "" for c in old_cols}, "ticker": "OLD", "composite_score": 50.0})
+
+    new_row = {col: "" for col in report.SIGNALS_COLUMNS}
+    new_row.update({"ticker": "NEW", "close": 101.5, "volume": 1234567})
+    report.append_signals([new_row], path)
+
+    with path.open(newline="", encoding="utf-8") as fh:
+        rows = list(csv.reader(fh))
+    assert rows[0] == list(report.SIGNALS_COLUMNS)  # header upgraded to current schema
+    data = {r[1]: r for r in rows[1:]}  # keyed by ticker (col 1)
+    close_idx = list(report.SIGNALS_COLUMNS).index("close")
+    assert data["OLD"][close_idx] == ""          # migrated old row: new column back-filled blank
+    assert data["NEW"][close_idx] == "101.5"     # new row aligned under the new header
+
+
 def test_write_tv_import_file(tmp_path: Path) -> None:
     path = report.write_tv_import_file(CARDS, "daily", config_with_output(tmp_path))
     text = path.read_text(encoding="utf-8")

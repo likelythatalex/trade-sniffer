@@ -142,8 +142,10 @@ review:
   model: claude-haiku-4-5-20251001  # cheap; the review reasons over structured evidence
   api_key_env: ANTHROPIC_API_KEY    # from env/secret, never committed (anthropic only)
   base_url: http://localhost:11434  # ollama endpoint (used only when provider=ollama)
-  max_tokens: 600               # a review is a short verdict + concerns list, not an essay
-                                # (400 truncated Haiku mid-bullet; 600 leaves headroom to finish)
+  max_tokens: 1500              # ceiling, not target: billed/timed on tokens ACTUALLY generated.
+                                # Haiku self-stops ~300; a local *thinking* model (e.g. gemma) spends
+                                # ~400 tokens reasoning before the answer, so 600 clipped it to empty.
+                                # 1500 lets thinking models finish; barely affects cloud cost.
   max_reviews_per_run: 3        # HARD cap on LLM calls per run (top-N NEW candidates by score)
   only_new: true                # review only NEW transitions; continuing setups reuse the cache
 

@@ -139,7 +139,7 @@ def run_timeframe(
             made_watchlist = composite.score >= config.scoring.watchlist_threshold
             signal_rows.append(
                 _signals_row(run_ts, ticker, timeframe, composite, results.get("wyckoff"),
-                             features, quality, made_watchlist, other_direction,
+                             features, cleaned, quality, made_watchlist, other_direction,
                              momentum=results.get("momentum"))
             )
             if made_watchlist and composite.direction != "none":
@@ -363,6 +363,7 @@ def _signals_row(
     composite: StrategyResult,
     wyckoff: StrategyResult | None,
     features: pd.DataFrame,
+    prices: pd.DataFrame,
     quality: QualityReport,
     made_watchlist: bool,
     mtf_direction: str | None = None,
@@ -370,9 +371,12 @@ def _signals_row(
 ) -> dict[str, Any]:
     """Build one signals.csv row (schema ``SIGNALS_COLUMNS``) for an evaluated ticker.
 
+    ``prices`` is the cleaned OHLCV (aligned to ``features``); its last bar's raw
+    close/volume are logged so forward outcomes can be derived from the log alone.
     ``transition`` is set to "none" here and patched after classification.
     """
     last = features.iloc[-1] if len(features) else None
+    last_bar = prices.iloc[-1] if len(prices) else None
     sub = wyckoff.sub_scores if wyckoff else {}
     conf = wyckoff.metadata.get("confirmation", {}) if wyckoff else {}
     return {
@@ -393,6 +397,8 @@ def _signals_row(
         "mtf_agree": _mtf_agree(mtf_direction, composite.direction),
         "trend_context": _round(conf.get("trend")),
         "data_quality_flag": "; ".join(quality.repairs),
+        "close": _feat(last_bar, "close"),
+        "volume": _feat(last_bar, "volume"),
         "feat_volume_ratio": _feat(last, "volume_ratio"),
         "feat_volume_pctile": _feat(last, "volume_pctile"),
         "feat_spread_atr": _feat(last, "spread_atr"),

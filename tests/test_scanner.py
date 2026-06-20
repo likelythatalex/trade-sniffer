@@ -39,12 +39,14 @@ def test_signals_row_matches_schema() -> None:
     features = pd.DataFrame(
         {"volume_ratio": [1.5], "volume_pctile": [90.0], "spread_atr": [0.4], "spread_pctile": [80.0], "close_position": [0.2]}
     )
-    row = scanner._signals_row("2024-06-01T22:00:00Z", "XOM", "daily", composite, wyckoff, features, _empty_quality(), True)
+    prices = pd.DataFrame({"high": [106.0], "low": [103.0], "close": [105.5], "volume": [1234567.0]})
+    row = scanner._signals_row("2024-06-01T22:00:00Z", "XOM", "daily", composite, wyckoff, features, prices, _empty_quality(), True)
     assert set(row).issubset(set(scanner.SIGNALS_COLUMNS))
     assert row["ticker"] == "XOM"
     assert row["composite_score"] == 72.0
     assert row["volume_score"] == 80.0
     assert row["feat_close_position"] == 0.2
+    assert row["close"] == 105.5 and row["volume"] == 1234567.0  # raw evaluated-bar facts logged
     assert row["transition"] == "none"
     assert row["made_watchlist"] is True
 

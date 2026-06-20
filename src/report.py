@@ -22,13 +22,18 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from .config import Config
 
 # signals.csv schema (SPEC §8.4). Bump SCHEMA_VERSION + migrate when this changes.
+# append_signals() migrates an older-schema file in place, so bumps are additive-safe.
 # v2: added momentum_score (the 2nd strategy's signed composite; additive — old rows blank).
-SCHEMA_VERSION = 2
+# v3: added raw close/volume of the evaluated bar so forward outcomes are derivable from
+#     the log itself (survivorship-honest, no re-fetch) instead of only via replay.
+SCHEMA_VERSION = 3
 SIGNALS_COLUMNS = (
     "run_ts", "ticker", "timeframe", "direction", "composite_score", "wyckoff_score",
     "momentum_score",
     "range_score", "volume_score", "spring_score", "confirmation_score",
     "rs_vs_spy", "vol_contraction", "mtf_agree", "trend_context", "data_quality_flag",
+    # Raw bar facts the feat_* are derived from — kept so the log alone yields forward outcomes.
+    "close", "volume",
     "feat_volume_ratio", "feat_volume_pctile", "feat_spread_atr", "feat_spread_pctile",
     "feat_close_position", "made_watchlist", "transition",
 )
@@ -159,12 +164,34 @@ def append_signals(rows: list[dict[str, Any]], path: Path) -> None:
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    _migrate_schema(path)  # bring an older-schema file up to current columns before appending
     write_header = not path.exists() or path.stat().st_size == 0
     with path.open("a", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=SIGNALS_COLUMNS, extrasaction="ignore")
         if write_header:
             writer.writeheader()
         for row in rows:
+            writer.writerow({col: row.get(col, "") for col in SIGNALS_COLUMNS})
+
+
+def _migrate_schema(path: Path) -> None:
+    """Rewrite an existing ``signals.csv`` under the current ``SIGNALS_COLUMNS`` if its
+    header differs (e.g. a schema bump added columns), back-filling new columns blank.
+
+    Additive-safe and idempotent: rows are read by their own header and re-mapped by name,
+    so appending never misaligns an older-schema log. Runs only when the header differs.
+    """
+    if not path.exists() or path.stat().st_size == 0:
+        return
+    with path.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if list(reader.fieldnames or []) == list(SIGNALS_COLUMNS):
+            return  # already current — nothing to do
+        old_rows = list(reader)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=SIGNALS_COLUMNS, extrasaction="ignore")
+        writer.writeheader()
+        for row in old_rows:
             writer.writerow({col: row.get(col, "") for col in SIGNALS_COLUMNS})
 
 

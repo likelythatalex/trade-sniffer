@@ -525,17 +525,20 @@ holds the prior run's qualifying set per timeframe):
   (`notify.suppress_empty`, default true).
 
 ### 8.4 Signal log (`output/signals.csv`)
-- Append every evaluated ticker (even sub-threshold) per run. Schema:
-  `run_ts, ticker, timeframe, direction, composite_score, wyckoff_score, range_score,
-  volume_score, spring_score, confirmation_score, rs_vs_spy, vol_contraction, mtf_agree,
-  trend_context, data_quality_flag, feat_volume_ratio, feat_volume_pctile, feat_spread_atr,
-  feat_spread_pctile, feat_close_position, made_watchlist, transition` where `transition` ∈
-  {`new`, `continuing`, `failed`, none}. ("Invalidated" maps to `failed`;
-  "still-qualifying" maps to `continuing`.) `mtf_agree` is empty/`n/a` on cold start.
+- Append every evaluated ticker (even sub-threshold) per run. Schema (v3):
+  `run_ts, ticker, timeframe, direction, composite_score, wyckoff_score, momentum_score,
+  range_score, volume_score, spring_score, confirmation_score, rs_vs_spy, vol_contraction,
+  mtf_agree, trend_context, data_quality_flag, close, volume, feat_volume_ratio,
+  feat_volume_pctile, feat_spread_atr, feat_spread_pctile, feat_close_position, made_watchlist,
+  transition` where `transition` ∈ {`new`, `continuing`, `failed`, none}. ("Invalidated" maps
+  to `failed`; "still-qualifying" maps to `continuing`.) `mtf_agree` is empty/`n/a` on cold start.
 - **N6:** the `feat_*` columns log the §5A normalized features **at the evaluated (last
-  closed) bar**, so calibration can later relate thresholds to outcomes. Adding these is a
-  schema change — bump the schema version and migrate existing `signals.csv` (don't break
-  the log; per the CLAUDE.md definition-of-done).
+  closed) bar**, so calibration can later relate thresholds to outcomes.
+- **v3:** `close`/`volume` log the **raw** evaluated bar, so a forward outcome can be derived
+  from the log itself (survivorship-honest, no re-fetch) — the `feat_*` are normalized and
+  can't reconstruct price. Adding columns is a schema change — `report.append_signals()`
+  migrates an older-schema file in place (rewrites under the current header, new columns
+  back-filled blank), so the log is never broken (per the CLAUDE.md definition-of-done).
 - Per-strategy columns are namespaced so adding strategies extends (not breaks) the schema;
   `composite_score` is the combiner output, `wyckoff_score` the strategy's own; `feat_*`
   columns are strategy-agnostic (produced by `features.py`).

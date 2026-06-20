@@ -40,6 +40,11 @@ journal_*.csv
 journal_report*.html
 trade_reviews.json
 
+# --- Copyrighted reference material (LOCAL ONLY — never committed to a public repo) ---
+# Third-party books/PDFs used as reference while building the strategy. We may paraphrase
+# methodology into our own docs, but the source texts themselves stay off the repo.
+docs/*.pdf
+
 # --- IDE / editor ---
 .vscode/
 .idea/
