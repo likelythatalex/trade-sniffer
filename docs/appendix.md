@@ -12,6 +12,16 @@ CHANGE-MARK (refinement pass, aligned to SPEC §6.1/§6.4):
   • §D calibration table: added range_extreme_fraction, spring_lookback/snapback, trend_lookback,
     no_demand_supply_median_window; "prev N" reframed as source-note only.
   Status tags unchanged (still pre-implementation). No other entries altered.
+
+  Wyckoff source-alignment pass (against Villahermosa, *The Wyckoff Methodology in Depth*):
+  • "Spring / Upthrust" → "Spring / UTAD": our upthrust side is the book's Phase-C UTAD, not
+    the minor Phase-B UT; charted markers noted.
+  • "Climax" entry: SC/BC chart marker noted.
+  • "Trading Range / Phases" entry: Creek/ICE band labels; PS/PSY/AR/ST/SOS/LPS named as
+    not-modelled (canon-mapping table now lives in Methodology §0).
+  • New "Law of Cause & Effect (target projection)" entry: FUTURE (targets are range/ATR-based,
+    not a P&F cause count).
+  • "Embedded Charts / Dashboard" entry: Creek/ICE + Spring/UTAD + SC/BC markers + legend.
 -->
 
 A living reference for the trading/market concepts this project uses, what they mean in
@@ -111,22 +121,26 @@ version. Think of it as a README for the *domain*, not the code.
   **and** a subsequent sharp reaction of ≥ `climax_reaction_atr` × ATR away from the climax
   bar's extreme — a spike with no reaction abstains. Feeds the `volume_behavior` sub-score.
   Climax does **not** set the range boundary — the band does (SPEC §6.1); climax-anchored
-  boundaries are FUTURE; the `volume_pctile` alternative remains deferred. Methodology §2.3.
+  boundaries are FUTURE; the `volume_pctile` alternative remains deferred. A confirmed climax
+  bar (`climax_bar`/`climax_type` in the result metadata) is surfaced as an **SC/BC marker on
+  the dashboard chart** (`scanner._chart_data`). This is the book's Event #2. Methodology §2.3.
 - **Status:** `IMPLEMENTED` (`strategies/wyckoff.py`, tested in `tests/test_wyckoff.py`):
-  spike + reaction; `volume_pctile` alternative still deferred.
+  spike + reaction, charted; `volume_pctile` alternative still deferred.
 
-### Spring / Upthrust
+### Spring / UTAD
 - **Plain meaning:** A false breakdown below support (spring, bullish) or false breakout
-  above resistance (upthrust, bearish) that snaps back into the range — a classic Wyckoff
-  trap of the uninformed.
+  above resistance (UTAD, bearish) that snaps back into the range — a classic Wyckoff
+  trap of the uninformed. **Naming:** our "upthrust" side is the book's **UTAD** (the Phase-C
+  shake), not the minor Phase-B "UT/UA" — see Methodology §2.4.
 - **How it's implemented here:** New low/high vs. the established band over `spring_lookback`
   + close back inside within `spring_snapback_bars` is the GATE (`detect_spring_upthrust`).
   Given detection, the magnitude scales from `SPRING_BASE_FRACTION` up to full with two
   equal-weight confirmations on the false-break bar: a rejection wick (`spring_wick_pct`) and
-  volume corroboration (above-median `volume_ratio`). Methodology §2.4.
+  volume corroboration (above-median `volume_ratio`). The bar is marked on the dashboard
+  chart (▲ Spring / ▼ UTAD). Methodology §2.4.
 - **Status:** `IMPLEMENTED` (`strategies/wyckoff.py`, tested in `tests/test_wyckoff.py`):
-  break+snapback + wick% + volume corroboration. Volume corroboration is a simple above-median
-  seed (the fuller impulse/correction-leg rule stays `[FUTURE]`).
+  break+snapback + wick% + volume corroboration, charted. Generic spring only — the book's
+  three spring sub-types stay `[FUTURE]`; the impulse/correction-leg volume rule stays `[FUTURE]`.
 
 ### Trading Range / Phases (A–E)
 - **Plain meaning:** The consolidation where accumulation/distribution happens; Wyckoff
@@ -135,9 +149,22 @@ version. Think of it as a README for the *domain*, not the code.
 - **How it's implemented here:** Range **boundaries defined by a support/resistance band**
   over `range_lookback` (`detect_trading_range`, SPEC §6.1), validated by `range_max_width_pct`
   / `min_range_bars`; a valid range is a **precondition** for any directional call. Phase
-  context used as *scoring bias*, not a hard label. Climax-anchored boundaries are FUTURE.
+  context used as *scoring bias*, not a hard label. The band lines are labelled **Creek**
+  (resistance) / **ICE** (support) on the chart; AR-anchored Creek/ICE boundaries are FUTURE.
+  The events that bound/confirm the range in the book — PS/PSY, AR, ST, SOS/SOW, LPS/LPSY —
+  are **not modelled** (see the canon-mapping table in Methodology §0).
 - **Status:** `PARTIAL`-by-design (`strategies/wyckoff.py`) — range band implemented; full
-  phase labeling intentionally not.
+  phase labeling and the named bounding/confirming events intentionally not.
+
+### Law of Cause & Effect (target projection)
+- **Plain meaning:** Wyckoff's third law — the time/extent of the cause built in the trading
+  range determines the size of the effect (the subsequent move). Classically measured with a
+  Point-and-Figure horizontal count to project a price objective.
+- **How it's implemented here:** **Not modelled.** The suggested `trade_plan` target is
+  derived from the range height / ATR and a reward:risk rule (`trade_plan.plan_trade`), **not**
+  from a P&F cause count. This is an honest divergence from the book, not an approximation of it.
+- **Status:** `FUTURE` — a P&F (or range-height) cause-based target projection is a planned
+  refinement to the trade planner. See [ROADMAP.md](../ROADMAP.md). Methodology §0.
 
 ### Per-Stock Normalization (relative features)
 - **Plain meaning:** "High volume" or "narrow spread" only mean something relative to a
@@ -293,10 +320,12 @@ version. Think of it as a README for the *domain*, not the code.
 - **How it's implemented here:** `report.render_dashboard` renders a single-file HTML report
   per timeframe (Jinja2 template): a **ranked candidate list + one shared annotated chart**
   built with TradingView's open-source **Lightweight Charts™**, fed by OHLCV embedded in the
-  page as JSON (no view-time data fetch). Annotations: range high/low band + spring/upthrust
-  marker (`scanner._chart_data`, from the Wyckoff result metadata). Keeps an "open in
-  TradingView" link + attribution. Plus `write_tv_import_file` (secondary `.txt`),
-  `write_index_page` (`index.html` landing page), and `append_signals` (schema-stable log).
+  page as JSON (no view-time data fetch). Annotations (`scanner._chart_data`, from the Wyckoff
+  result metadata): range band labelled **Creek/ICE**, Phase-C **Spring ▲ / UTAD ▼** markers,
+  confirmed **SC/BC** climax markers, the suggested entry/stop/target lines, and a short
+  Wyckoff legend caption under the chart. Keeps an "open in TradingView" link + attribution.
+  Plus `write_tv_import_file` (secondary `.txt`), `write_index_page` (`index.html` landing
+  page), and `append_signals` (schema-stable, self-migrating log).
 - **Status:** `IMPLEMENTED` (`report.py`, tested in `tests/test_report.py`); wired
   end-to-end by `scanner.py`. CI publishes output to the **gh-pages** branch (GitHub Pages),
   so `main` stays code-only and the dashboard is viewable at

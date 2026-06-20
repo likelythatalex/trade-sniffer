@@ -266,12 +266,13 @@ def test_climax_fires_only_with_reaction() -> None:
     params = make_params(climax_window=10, climax_reaction_atr=1.0, high_volume_ratio=2.0)
     near_support = {"near_support": True, "near_resistance": False}
 
-    contribution, reason = _score_climax(_climax_df(reaction=True), compute_features(_climax_df(True), 5), near_support, params)
+    contribution, reason, climax = _score_climax(_climax_df(reaction=True), compute_features(_climax_df(True), 5), near_support, params)
     assert contribution == 100.0 and "reaction" in reason
+    assert climax["type"] == "selling_climax" and climax["bar"] is not None  # surfaced for the chart
 
     # Same volume spike, but no follow-through reaction -> abstain (a spike is not a climax).
-    no_reaction, _ = _score_climax(_climax_df(reaction=False), compute_features(_climax_df(False), 5), near_support, params)
-    assert no_reaction is None
+    no_reaction, _, no_climax = _score_climax(_climax_df(reaction=False), compute_features(_climax_df(False), 5), near_support, params)
+    assert no_reaction is None and no_climax is None
 
 
 # --- evaluate (the M1 proof) --------------------------------------------------

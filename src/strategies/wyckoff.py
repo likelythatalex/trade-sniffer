@@ -58,7 +58,7 @@ class WyckoffStrategy(Strategy):
                 levels=Levels(range_high=range_info["range_high"], range_low=range_info["range_low"], atr=atr),
             )
 
-        volume_score, volume_reasons = score_volume_behavior(df, features, range_info, params)
+        volume_score, volume_reasons, climax = score_volume_behavior(df, features, range_info, params)
         spring = detect_spring_upthrust(df, features, range_info, params)
         confirmation_score, confirmation_reasons, confirmation_breakdown = score_confirmation(
             df, features, range_info, params, context.prior_state, context.benchmark_close
@@ -101,6 +101,9 @@ class WyckoffStrategy(Strategy):
                 "is_spring": spring["is_spring"],
                 "is_upthrust": spring["is_upthrust"],
                 "spring_bar": spring["bar"],  # timestamp of the spring/upthrust bar, for chart marker
+                # Confirmed Selling/Buying Climax bar (Event #2), for the chart marker. None if absent.
+                "climax_bar": climax["bar"] if climax else None,
+                "climax_type": climax["type"] if climax else None,
                 "confirmation": confirmation_breakdown,  # per-input contributions, for logging
             },
             levels=levels,
@@ -170,9 +173,12 @@ def _range_structure_score(range_info: dict[str, Any], params: dict[str, Any]) -
 
 def score_volume_behavior(
     df: pd.DataFrame, features: pd.DataFrame, range_info: dict[str, Any], params: dict[str, Any]
-) -> tuple[float, list[str]]:
+) -> tuple[float, list[str], dict[str, Any] | None]:
     """§6.2 — effort vs. result, No Demand/No Supply, climax. Signed; mean of the
-    firing signals (equal-weight seed). + = accumulation, - = distribution."""
+    firing signals (equal-weight seed). + = accumulation, - = distribution.
+
+    Returns ``(score, reasons, climax)`` where ``climax`` is the confirmed Selling/Buying
+    Climax bar (or ``None``), surfaced so it can be marked on the dashboard chart."""
     contributions: list[float] = []
     reasons: list[str] = []
 
@@ -209,27 +215,31 @@ def score_volume_behavior(
     # Climax: a volume spike at an extreme that is FOLLOWED BY a sharp reaction (the
     # exhaustion-then-reversal that actually defines a climax — a spike with no reaction
     # is just a spike). See _score_climax.
-    climax_contribution, climax_reason = _score_climax(df, features, range_info, params)
+    climax_contribution, climax_reason, climax = _score_climax(df, features, range_info, params)
     if climax_contribution is not None:
         contributions.append(climax_contribution)
         reasons.append(climax_reason)
 
     score = sum(contributions) / len(contributions) if contributions else 0.0
-    return score, reasons
+    return score, reasons, climax
 
 
 def _score_climax(
     df: pd.DataFrame, features: pd.DataFrame, range_info: dict[str, Any], params: dict[str, Any]
-) -> tuple[float | None, str | None]:
-    """Climax at a range extreme: a volume spike (``volume_ratio`` ≥ ``high_volume_ratio``)
-    *and* a subsequent sharp reaction of at least ``climax_reaction_atr`` × ATR away from
-    the climax bar's extreme. The reaction is the confirmation the prior code lacked — a
-    bare spike now abstains. ``(None, None)`` when mid-range, no spike, or no reaction yet
-    (climax too recent to judge). ``volume_pctile`` alternative stays deferred."""
+) -> tuple[float | None, str | None, dict[str, Any] | None]:
+    """Climax at a range extreme — the book's Event #2 (Selling Climax / Buying Climax):
+    a volume spike (``volume_ratio`` ≥ ``high_volume_ratio``) *and* a subsequent sharp
+    reaction of at least ``climax_reaction_atr`` × ATR away from the climax bar's extreme.
+    The reaction is the confirmation the prior code lacked — a bare spike now abstains.
+
+    Returns ``(contribution, reason, climax)`` where ``climax`` is ``{"bar", "type"}`` for a
+    confirmed climax (so it can be marked on the chart) or ``None``. All three are ``None``
+    when mid-range, no spike, or no reaction yet (climax too recent to judge).
+    ``volume_pctile`` alternative stays deferred."""
     near_support = range_info.get("near_support", False)
     near_resistance = range_info.get("near_resistance", False)
     if not (near_support or near_resistance):
-        return None, None
+        return None, None, None
 
     n = len(df)
     window = min(int(params["climax_window"]), n)
@@ -237,27 +247,28 @@ def _score_climax(
     vol = features["volume_ratio"].iloc[-window:]
     peak = vol.max()
     if pd.isna(peak) or peak < high_volume:
-        return None, None  # no genuine volume spike in the window
+        return None, None, None  # no genuine volume spike in the window
 
     climax_idx = n - window + int(vol.to_numpy().argmax())
     after = df.iloc[climax_idx + 1 :]
     if after.empty:
-        return None, None  # climax is the last bar -> reaction not observable yet
+        return None, None, None  # climax is the last bar -> reaction not observable yet
 
     atr = float((df["high"].iloc[-window:] - df["low"].iloc[-window:]).mean())
     if atr <= 0:
-        return None, None
+        return None, None, None
     threshold = float(params["climax_reaction_atr"]) * atr
+    climax_bar = df.index[climax_idx]
 
     if near_support:  # selling climax -> price should rally off the climax low
         reaction = float(after["close"].max()) - float(df["low"].iloc[climax_idx])
         if reaction >= threshold:
-            return 100.0, "selling-climax + reaction near support"
+            return 100.0, "selling-climax + reaction near support", {"bar": climax_bar, "type": "selling_climax"}
     if near_resistance:  # buying climax -> price should drop off the climax high
         reaction = float(df["high"].iloc[climax_idx]) - float(after["close"].min())
         if reaction >= threshold:
-            return -100.0, "buying-climax + reaction near resistance"
-    return None, None
+            return -100.0, "buying-climax + reaction near resistance", {"bar": climax_bar, "type": "buying_climax"}
+    return None, None, None
 
 
 def detect_spring_upthrust(
@@ -265,6 +276,11 @@ def detect_spring_upthrust(
 ) -> dict[str, Any]:
     """§6.3 — spring (false break below support) / upthrust (false break above
     resistance), confirmed by a snapback close back inside the range.
+
+    Terminology note: what we call "upthrust" is, in the book's vocabulary, the
+    **UTAD** (Upthrust After Distribution) — the *Phase-C* shakeout that breaks the
+    Phase A/B highs and is the tradeable mirror of a Spring. The book reserves bare
+    "Upthrust/UT" for a *minor Phase-B* test of the AR high, which we do not model.
 
     Detection (break + snapback) is the GATE; given it, the magnitude scales from a
     base floor up to full with two quality confirmations — a rejection wick on the

@@ -17,11 +17,11 @@ from src import report
 
 CONFIG = config_module.load_config(Path("config.yaml"))
 
-def _chart(range_high=110.0, range_low=100.0, marker=None):
+def _chart(range_high=110.0, range_low=100.0, markers=None):
     return {
         "candles": [{"time": "2024-05-31", "open": 104.0, "high": 106.0, "low": 103.0, "close": 105.0}],
         "volume": [{"time": "2024-05-31", "value": 1000.0, "up": True}],
-        "range_high": range_high, "range_low": range_low, "marker": marker,
+        "range_high": range_high, "range_low": range_low, "markers": markers or [],
     }
 
 
@@ -33,7 +33,7 @@ CARDS = [
         "score": 72.0,
         "sub_scores": {"volume_behavior": 80.0, "range_structure": 40.0},
         "reasons": ["spring at support"],
-        "chart": _chart(marker={"time": "2024-05-31", "type": "spring"}),
+        "chart": _chart(markers=[{"time": "2024-05-31", "type": "spring"}]),
         "review": {"text": "Verdict: aligned\nClean base.", "verdict": "aligned", "model": "claude-haiku-4-5-20251001"},
     },
     {

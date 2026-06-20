@@ -268,9 +268,9 @@ _CHART_MAX_BARS = 250  # bars of history embedded per chart (keeps the page lean
 def _chart_data(df: pd.DataFrame, wyckoff: StrategyResult | None, max_bars: int = _CHART_MAX_BARS) -> dict[str, Any]:
     """OHLCV + annotations for one ticker's Lightweight Chart, embedded in the page.
 
-    Annotations (range band, spring/upthrust marker) come from the Wyckoff result's
-    metadata. This is the one strategy-specific bit of the chart; future strategies that
-    want their own overlays would surface them the same way.
+    Annotations (range band, spring/upthrust + climax markers) come from the Wyckoff
+    result's metadata. This is the one strategy-specific bit of the chart; future
+    strategies that want their own overlays would surface them the same way.
     """
     window = df.iloc[-max_bars:]
     candles = [
@@ -291,17 +291,23 @@ def _chart_data(df: pd.DataFrame, wyckoff: StrategyResult | None, max_bars: int 
 
     meta = wyckoff.metadata if wyckoff else {}
     range_info = meta.get("range", {})
+
+    # Chart markers: the Phase-C shake (Spring / UTAD) and the confirmed climax (SC / BC).
+    # The template maps each marker `type` to its shape/position/label.
+    markers: list[dict[str, Any]] = []
     spring_bar = meta.get("spring_bar")
-    marker = None
     if spring_bar is not None:
-        marker = {"time": _chart_time(spring_bar), "type": "spring" if meta.get("is_spring") else "upthrust"}
+        markers.append({"time": _chart_time(spring_bar), "type": "spring" if meta.get("is_spring") else "upthrust"})
+    climax_bar = meta.get("climax_bar")
+    if climax_bar is not None:
+        markers.append({"time": _chart_time(climax_bar), "type": meta.get("climax_type")})
 
     return {
         "candles": candles,
         "volume": volume,
         "range_high": _maybe_round(range_info.get("range_high")),
         "range_low": _maybe_round(range_info.get("range_low")),
-        "marker": marker,
+        "markers": markers,
     }
 
 

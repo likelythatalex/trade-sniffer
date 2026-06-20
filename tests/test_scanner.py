@@ -70,7 +70,7 @@ def test_card_shape() -> None:
     assert card["sub_scores"] == {"volume_behavior": 80.0} and card["reasons"] == ["spring"]
     chart = card["chart"]
     assert len(chart["candles"]) == 3 and chart["range_high"] == 110.0
-    assert chart["marker"]["type"] == "spring"  # spring bar surfaced as a chart marker
+    assert chart["markers"][0]["type"] == "spring"  # spring bar surfaced as a chart marker
     # Suggested trade plan derived from the composite's structural levels (display-only).
     assert card["plan"]["entry"] == 110.0 and card["plan"]["reward_risk"] > 0
     assert card["plan"]["management"]  # the playbook lines are present

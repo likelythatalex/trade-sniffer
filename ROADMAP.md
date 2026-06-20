@@ -113,7 +113,8 @@ here only for visibility/sequencing.
 | Crypto mode | TODO | Separate profile (24/7, crypto RS benchmark, crypto symbols/liquidity). Same phase as multi-strategy. SPEC §12. |
 | Telegram notification channel | TODO | Behind the existing `notify.py` interface. SPEC §8.3, §12. |
 | Regime-aware feature baselines | TODO | e.g. reset volatility baseline after earnings expansion. SPEC §12. |
-| Climax-anchored range boundaries | TODO | Refinement over the v1 support/resistance band. SPEC §12; methodology §2.3/§3. |
+| Climax-anchored range boundaries | TODO | Refinement over the v1 support/resistance band — the book's true Creek/ICE (anchored on the AR). SPEC §12; methodology §2.3/§3. |
+| Cause & Effect target projection (P&F count) | TODO | The trade planner's target is currently a range/ATR measured-move; Wyckoff's third law sizes the *effect* from the *cause* via a Point-and-Figure horizontal count. Add a P&F (or range-height) cause-based target as an alternative `stop_method`-style option in `trade_plan.py`. Honest gap, flagged in methodology §0 / appendix "Law of Cause & Effect". |
 | Paid data source (Polygon) | TODO | If intraday / higher quality is ever needed. SPEC §12. |
 | IBKR optional output | TODO | For users keeping TWS running. SPEC §12. |
 | Hosted multi-tool dashboard / orchestrator | TODO (trigger-based) | Phased plan lives in **Hosting & UI evolution** above (Phase A done; B = the backend step, trigger-gated). The static gh-pages + GitHub Actions model is the orchestrator until a concrete trigger fires. |

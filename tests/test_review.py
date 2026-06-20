@@ -43,7 +43,7 @@ def _card(ticker: str, score: float = 80.0, direction: str = "accumulation") -> 
         "ticker": ticker, "direction": direction, "score": score,
         "sub_scores": {"wyckoff.volume_behavior": 70.0}, "reasons": ["spring at support"],
         "chart": {"candles": [{"time": "2024-05-31", "open": 1, "high": 2, "low": 0.5, "close": 1.5}],
-                  "range_high": 110.0, "range_low": 100.0, "marker": None},
+                  "range_high": 110.0, "range_low": 100.0, "markers": []},
     }
 
 

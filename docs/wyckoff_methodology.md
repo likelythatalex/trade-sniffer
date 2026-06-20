@@ -30,11 +30,46 @@ implementer reads to turn discretionary chart-reading into deterministic, testab
    a calibration parameter, not gospel. Where Wyckoff/VSA schools disagree, the choice made
    here is noted with `[CHOICE: …]`.
 
-> **Sourcing note.** Content below is stubbed from VSA-oriented Wyckoff material (a
+> **Sourcing note.** Content below is grounded in VSA-oriented Wyckoff material (a
 > highly-regarded long-form video lecture and Villahermosa's *The Wyckoff Methodology in
-> Depth*). Numeric specifics from a *summary* of a source must be confirmed against the
-> source itself before they are trusted — summaries tend to invent precision the original
-> did not intend. **Stubs marked `[VERIFY]` are not yet confirmed.**
+> Depth*, hereafter "the book"). The book's **event/structure definitions** have now been
+> read against the source and the items below cite it (`[SOURCE: book]`). **Numbers stay
+> `[TUNABLE]` regardless** — confirming a definition does not harden its thresholds into
+> truths; those are still calibration seeds against `signals.csv`. Items still marked
+> `[VERIFY]` are not yet confirmed.
+
+---
+
+## 0. Mapping to the Wyckoff canon (scope & fidelity)
+
+This tool detects the **structural fingerprints** of accumulation/distribution and emits a
+0–100 conviction score. It deliberately does **not** label phases or call individual events
+by name in its output. This table is the honest bridge between the book's vocabulary and
+what the code actually computes — read it to know what we model, what we approximate, and
+what we leave out on purpose.
+
+| Book concept (Villahermosa) | Our component | Fidelity |
+|---|---|---|
+| Law of Effort vs Result (Ch 9) | `volume_behavior` effort/result + No Demand/Supply (§2.1–2.2) | Faithful |
+| Law of Supply & Demand (Ch 7) | range-location + absorption reads (§2, §3) | Faithful (implicit) |
+| Law of Cause & Effect (Ch 8) — P&F count | **not modelled** — `trade_plan` targets are range/ATR-based, not a cause projection | **Gap** `[FUTURE]` |
+| Selling/Buying Climax — SC/BC (Event #2) | `_score_climax` (spike + reaction); now marked on the chart | Faithful |
+| Spring / Shakeout (Event #5) | `detect_spring_upthrust` spring side (§2.4) | Faithful (generic; not the book's 3 sub-types) |
+| **UTAD** (Phase-C distribution shake) | `detect_spring_upthrust` upthrust side — this is **UTAD**, not the minor Phase-B "UT/UA" | Faithful (see §2.4 note) |
+| Trading range bounded by **Creek / ICE** | support/resistance band over `range_lookback` (§3) | Simplified — band, not AR-anchored Creek/ICE `[FUTURE]` |
+| Preliminary Support/Supply — PS/PSY (Event #1) | **not modelled** | Out of scope |
+| Automatic Rally/Reaction — AR (Event #3) | **not modelled** as a named level (would anchor Creek/ICE) | Out of scope `[FUTURE]` |
+| Secondary Test — ST (Event #4) | **not modelled** as a distinct event | Out of scope |
+| Breakout — SOS / SOW, Jump-Across-the-Creek (Event #6) | **not modelled** — we flag *within-range* setups | Out of scope `[FUTURE]` |
+| Confirmation — LPS / LPSY, BUEC (Event #7) | **not modelled** | Out of scope `[FUTURE]` |
+| Phases A–E | **not modelled** — we score conviction, never assert a phase label | Out of scope by design |
+
+**Why this scope:** the book itself frames Phase-C events (Spring/UTAD) as the
+highest-reward, and treats phase labelling as discretionary. We encode the high-value,
+objectively-detectable parts (range location + volume behaviour + the Phase-C shake +
+climax context) as a conviction score, and leave the discretionary labelling to the human
+reviewer. The "Out of scope" rows are candidates for future strategies/refinements, not
+errors. See [appendix.md](appendix.md) for implementation status.
 
 ---
 
@@ -81,8 +116,8 @@ candidates to confirm against the source.
 - **Idea:** result (price movement) should match effort (volume). A mismatch signals
   absorption or exhaustion.
 - **Condition (candidate):** `volume_ratio` high **and** `spread_atr` low (high effort, no
-  result) → absorption/exhaustion flag. `[VERIFY]` `[TUNABLE: high = volume_ratio ≥ 2.0;
-  low = spread_atr ≤ 0.5]`
+  result) → absorption/exhaustion flag. `[SOURCE: book — Law of Effort vs Result, Ch 9]`
+  `[TUNABLE: high = volume_ratio ≥ 2.0; low = spread_atr ≤ 0.5]`
 - **Directional read** depends on location in the range and `close_position`.
 
 ### 2.2 No Demand / No Supply
@@ -99,21 +134,30 @@ candidates to confirm against the source.
   `range_extreme_fraction` of the range, seed 0.33) — not a separate threshold (see SPEC §6.1).
 - These are clean, objective support/resistance tests — high value, low complexity.
 
-### 2.3 Climax (selling / buying)
-- **Selling/Buying Climax (candidate):** the highest `volume_pctile` bar within a localized
-  window, followed by a sharp reversal reaction. `[VERIFY]` `[TUNABLE: window length;
-  "sharp reaction" magnitude]`
+### 2.3 Climax (selling / buying) — SC / BC, Event #2
+- **Selling/Buying Climax:** the highest-volume bar within a localized window, followed by a
+  sharp reversal reaction. `[SOURCE: book — Event #2, Climax]` `[TUNABLE: window length;
+  "sharp reaction" magnitude]` The reaction requirement is deliberate: a bare volume spike
+  is not a climax until price reacts off it (`_score_climax`).
 - **Preliminary stop (candidate):** a sudden volume spike on a narrow-range bar during a
-  clear trend (an early warning before the climax). `[VERIFY]`
+  clear trend (an early warning before the climax — the book's PS/PSY, Event #1). `[VERIFY]`
+  Not modelled in v1 (see §0).
 - Climax characterization feeds the `volume_behavior` sub-score and provides *context* for
-  range scoring (§3). In v1 it does **not** set the range boundary (the band does).
+  range scoring (§3). In v1 it does **not** set the range boundary (the band does). A
+  confirmed climax bar is **marked on the dashboard chart** (SC/BC glyph).
 
-### 2.4 Spring / Upthrust (structural extremes)
-- **Spring (candidate):** within `spring_lookback` bars, price makes a new low *relative to
+### 2.4 Spring / Upthrust (structural extremes) — Event #5, Shaking
+- **Spring:** within `spring_lookback` bars, price makes a new low *relative to
   the lookback range* then closes back inside the range within `spring_snapback_bars`,
-  ideally on a volume/spread profile consistent with §2.1.
+  ideally on a volume/spread profile consistent with §2.1. `[SOURCE: book — Event #5, Spring]`
   `[TUNABLE: spring_lookback; spring_snapback_bars; spring_wick_pct — all per-TF config seeds]`
-- **Upthrust:** mirror image at the range high.
+  We detect a single generic spring; the book's three sub-types (Spring / Test Spring /
+  Terminal Shakeout) are not separately classified `[FUTURE]`.
+- **Upthrust = UTAD.** Mirror image at the range high. **Naming precision:** what we label
+  "upthrust" is the book's **UTAD** (Upthrust After Distribution) — the *Phase-C* shake that
+  breaks the Phase A/B highs and is the true mirror of a Spring. The book reserves bare
+  "Upthrust/UT" for a *minor Phase-B* test of the AR high, which we do not model. The chart
+  marker therefore reads **UTAD**, not "Upthrust". `[SOURCE: book — UTAD, Event #5 / Phase C]`
 - Bonus conviction when the false-break's volume behavior corroborates (e.g. spring on
   diminishing supply, recovery on rising demand).
 
@@ -122,8 +166,10 @@ candidates to confirm against the source.
 ## 3. Trading range & structure
 
 - **Range boundaries (v1):** the trading range is a support/resistance **band** detected over
-  `range_lookback` — this is the v1 boundary method (see SPEC §6.1). `[FUTURE]` Anchoring the
-  boundaries off climax-driven automatic rally/reaction levels (§2.3) is a planned refinement,
+  `range_lookback` — this is the v1 boundary method (see SPEC §6.1). In the book's vocabulary
+  the resistance is the **Creek** and the support the **ICE**; the chart labels the band lines
+  accordingly. `[FUTURE]` Anchoring the boundaries off the climax-driven Automatic Rally/
+  Reaction levels (§2.3) — the book's *true* Creek/ICE definition — is a planned refinement,
   **not v1**. In v1, climax (§2.3) informs *scoring within* the range (range_structure context
   + volume_behavior), it does not define the boundary. `[VERIFY]` (for the future method)
 - Range validity gates (`range_max_width_pct`, `min_range_bars`) already in config; confirm

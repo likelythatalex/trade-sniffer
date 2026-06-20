@@ -56,6 +56,8 @@
     #chart { height: 460px; margin-top: .5rem; border: 1px solid var(--line); border-radius: 6px; }
     footer { margin-top: 1.5rem; font-size: .85rem; opacity: .7; }
     .empty { opacity: .6; padding: 2rem 0; }
+    .chart-legend { font-size: .8rem; opacity: .75; line-height: 1.5; margin: .5rem 0 0; }
+    .chart-legend em { font-style: normal; font-weight: 600; }
   </style>
   <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
@@ -105,6 +107,14 @@
       <div class="review" id="p-review" hidden></div>
       <a class="tvlink" id="p-tvlink" target="_blank" rel="noopener"></a>
       <div id="chart"></div>
+      <p class="chart-legend">
+        <strong>Reading the chart (Wyckoff):</strong>
+        dashed band = trading range (<em>Creek</em> = resistance, <em>ICE</em> = support).
+        <em>SC/BC</em> = Selling/Buying Climax that stopped the prior trend.
+        <em>Spring</em> ▲ / <em>UTAD</em> ▼ = the Phase-C shakeout (false break + recovery) —
+        the highest-conviction event. Solid lines = a <em>suggested</em> entry/stop/target,
+        for human review only — never traded. We flag structural fingerprints, not phase labels.
+      </p>
       <p id="p-empty" class="empty" hidden>No candidates flagged this run.</p>
     </main>
   </div>
@@ -154,30 +164,33 @@
         time: b.time, value: b.value, color: (b.up ? palette.up : palette.down) + "80",
       })));
 
-      // Annotations: range band (support/resistance) + spring/upthrust marker.
+      // Annotations: range band (Creek/ICE) + Wyckoff event markers.
       // Clear the previous ticker's lines first — setData doesn't remove price lines.
       priceLines.forEach((pl) => candleSeries.removePriceLine(pl));
       priceLines = [];
       if (c.chart.range_high != null)
-        priceLines.push(candleSeries.createPriceLine({ price: c.chart.range_high, color: palette.range, lineStyle: 2, title: "range high" }));
+        priceLines.push(candleSeries.createPriceLine({ price: c.chart.range_high, color: palette.range, lineStyle: 2, title: "range high (Creek)" }));
       if (c.chart.range_low != null)
-        priceLines.push(candleSeries.createPriceLine({ price: c.chart.range_low, color: palette.range, lineStyle: 2, title: "range low" }));
+        priceLines.push(candleSeries.createPriceLine({ price: c.chart.range_low, color: palette.range, lineStyle: 2, title: "range low (ICE)" }));
       // Suggested trade plan: entry/stop/target as solid lines (range band is dashed above).
       if (c.plan) {
         priceLines.push(candleSeries.createPriceLine({ price: c.plan.entry, color: palette.marker, lineStyle: 0, title: "entry" }));
         priceLines.push(candleSeries.createPriceLine({ price: c.plan.stop, color: palette.down, lineStyle: 0, title: "stop" }));
         priceLines.push(candleSeries.createPriceLine({ price: c.plan.target, color: palette.up, lineStyle: 0, title: "target" }));
       }
-      if (c.chart.marker) {
-        const m = c.chart.marker;
-        candleSeries.setMarkers([{
-          time: m.time, position: m.type === "spring" ? "belowBar" : "aboveBar",
-          color: palette.marker, shape: m.type === "spring" ? "arrowUp" : "arrowDown",
-          text: m.type === "spring" ? "Spring" : "Upthrust",
-        }]);
-      } else {
-        candleSeries.setMarkers([]);
-      }
+      // Map each Wyckoff event type to its glyph. Spring/UTAD = Phase-C shake (arrow);
+      // SC/BC = the climax that stopped the prior trend (circle).
+      const MARKER_STYLE = {
+        spring:         { position: "belowBar", shape: "arrowUp",   text: "Spring", color: palette.marker },
+        upthrust:       { position: "aboveBar", shape: "arrowDown", text: "UTAD",   color: palette.marker },
+        selling_climax: { position: "belowBar", shape: "circle",    text: "SC",     color: palette.up },
+        buying_climax:  { position: "aboveBar", shape: "circle",    text: "BC",     color: palette.down },
+      };
+      const markers = (c.chart.markers || [])
+        .filter((m) => MARKER_STYLE[m.type])
+        .map((m) => ({ time: m.time, ...MARKER_STYLE[m.type] }))
+        .sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));  // setMarkers needs ascending time
+      candleSeries.setMarkers(markers);
       chart.timeScale().fitContent();
 
       // Header / details.
