@@ -67,6 +67,26 @@ def test_resolve_wyckoff_params_merges_weekly_over_defaults(
 # --- scoring_window must include the COMPLETE depth-lookback set ---------------
 
 
+def test_resolve_strategy_params_momentum_merges_weekly(raw_config: dict, tmp_path: Path) -> None:
+    cfg = config.load_config(write_config(tmp_path, raw_config))
+    assert config.resolve_strategy_params(cfg, "momentum", "daily")["ma_window"] == 50
+    assert config.resolve_strategy_params(cfg, "momentum", "weekly")["ma_window"] == 30  # weekly override
+    # wyckoff still routes through the same generic resolver.
+    assert config.resolve_strategy_params(cfg, "wyckoff", "daily")["range_lookback"] == 60
+
+
+def test_resolve_strategy_params_unknown_raises(raw_config: dict, tmp_path: Path) -> None:
+    cfg = config.load_config(write_config(tmp_path, raw_config))
+    with pytest.raises(ConfigError, match="No params resolver"):
+        config.resolve_strategy_params(cfg, "bogus", "daily")
+
+
+def test_momentum_rejects_nonpositive_lookback(raw_config: dict, tmp_path: Path) -> None:
+    raw_config["momentum"]["defaults"]["ma_window"] = 0
+    with pytest.raises(ConfigError, match="ma_window"):
+        config.load_config(write_config(tmp_path, raw_config))
+
+
 def test_scoring_window_reflects_every_depth_lookback(
     raw_config: dict, tmp_path: Path
 ) -> None:

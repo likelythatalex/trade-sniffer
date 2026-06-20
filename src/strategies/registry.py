@@ -8,11 +8,13 @@ single-maintainer tool that is easier to read than import-time auto-discovery.
 from __future__ import annotations
 
 from .base import Strategy
+from .momentum import MomentumStrategy
 from .wyckoff import WyckoffStrategy
 
 # name -> class. The key must match a key under ``strategies:`` in config.yaml.
 _REGISTRY: dict[str, type[Strategy]] = {
     "wyckoff": WyckoffStrategy,
+    "momentum": MomentumStrategy,
 }
 
 

@@ -103,6 +103,14 @@ class WyckoffConfig:
 
 
 @dataclass(frozen=True)
+class MomentumConfig:
+    """Momentum strategy params (SPEC §6) — same defaults+per_timeframe shape as Wyckoff."""
+
+    defaults: dict[str, Any]
+    per_timeframe: dict[str, dict[str, Any]]
+
+
+@dataclass(frozen=True)
 class ScoringConfig:
     watchlist_threshold: float
 
@@ -171,6 +179,7 @@ class Config:
     liquidity: LiquidityConfig
     strategies: dict[str, StrategySpec]
     wyckoff: WyckoffConfig
+    momentum: MomentumConfig
     scoring: ScoringConfig
     trade_plan: TradePlanConfig
     review: ReviewConfig
@@ -196,15 +205,34 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
     return config
 
 
+def _merge_timeframe(
+    defaults: dict[str, Any], per_timeframe: dict[str, dict[str, Any]], timeframe: str
+) -> dict[str, Any]:
+    """``defaults`` overlaid with ``per_timeframe[tf]`` (key by key) — the one merge rule."""
+    merged = dict(defaults)
+    merged.update(per_timeframe.get(timeframe, {}))
+    return merged
+
+
 def resolve_wyckoff_params(config: Config, timeframe: str) -> dict[str, Any]:
     """Return Wyckoff params for ``timeframe``: ``defaults`` overlaid with
     ``per_timeframe[tf]`` (key by key), plus ``sub_weights``. The single place config
     merging happens, so the strategy reads everything from one bag and never touches
     config structure. ``sub_weights`` is timeframe-independent (rides along unchanged)."""
-    params = dict(config.wyckoff.defaults)
-    params.update(config.wyckoff.per_timeframe.get(timeframe, {}))
+    params = _merge_timeframe(config.wyckoff.defaults, config.wyckoff.per_timeframe, timeframe)
     params["sub_weights"] = dict(config.wyckoff.sub_weights)
     return params
+
+
+def resolve_strategy_params(config: Config, name: str, timeframe: str) -> dict[str, Any]:
+    """Resolve any enabled strategy's per-timeframe params. Explicit per strategy (like the
+    registry) so the scanner can give each strategy its OWN params, not Wyckoff's — the
+    plumbing that makes a new strategy "a file + a config block"."""
+    if name == "wyckoff":
+        return resolve_wyckoff_params(config, timeframe)
+    if name == "momentum":
+        return _merge_timeframe(config.momentum.defaults, config.momentum.per_timeframe, timeframe)
+    raise ConfigError(f"No params resolver for strategy '{name}'.")
 
 
 def scoring_window(config: Config, timeframe: str) -> int:
@@ -240,6 +268,7 @@ def _build_config(raw: dict) -> Config:
     liquidity = _require(raw, "liquidity", "")
     strategies = _require(raw, "strategies", "")
     wyckoff = _require(raw, "wyckoff", "")
+    momentum = _require(raw, "momentum", "")
     scoring = _require(raw, "scoring", "")
     trade_plan = _require(raw, "trade_plan", "")
     review = _require(raw, "review", "")
@@ -289,6 +318,13 @@ def _build_config(raw: dict) -> Config:
                 for tf, overrides in _require(wyckoff, "per_timeframe", "wyckoff.").items()
             },
             sub_weights=dict(_require(wyckoff, "sub_weights", "wyckoff.")),
+        ),
+        momentum=MomentumConfig(
+            defaults=dict(_require(momentum, "defaults", "momentum.")),
+            per_timeframe={
+                tf: dict(overrides or {})
+                for tf, overrides in _require(momentum, "per_timeframe", "momentum.").items()
+            },
         ),
         scoring=ScoringConfig(
             watchlist_threshold=float(_require(scoring, "watchlist_threshold", "scoring.")),
@@ -349,6 +385,12 @@ def _validate(config: Config) -> None:
     for name in _DEPTH_LOOKBACK_PARAMS:
         if name not in config.wyckoff.defaults:
             raise ConfigError(f"wyckoff.defaults is missing required param '{name}'.")
+
+    # Momentum needs positive lookbacks; keep them within the fetched history (so the strategy
+    # has data) — they're modest vs the Wyckoff-sized warmup, so no extra history is required.
+    for name in ("ma_window", "roc_window"):
+        if int(config.momentum.defaults.get(name, 0)) <= 0:
+            raise ConfigError(f"momentum.defaults.{name} must be a positive integer.")
 
     # v1 ships Discord only.
     if config.output.notify.channel != "discord":

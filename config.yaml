@@ -47,9 +47,11 @@ strategies:
   wyckoff:
     enabled: true
     weight: 1.0
-  # momentum_regime:        # FUTURE example, not built
-  #   enabled: false
-  #   weight: 0.0
+  momentum:
+    enabled: true
+    weight: 0.0             # LOGGED BUT INERT: computed + logged every run (accrues
+                            # independence/correlation data) but contributes nothing to the
+                            # composite/qualification until calibration sets a weight. SPEC §6.
 
 # D6: Wyckoff parameters. `defaults` apply to every timeframe; `per_timeframe`
 # overrides are REQUIRED for weekly so a 60-*week* range isn't silently applied.
@@ -95,6 +97,18 @@ wyckoff:
     volume_behavior: 35         # Wyckoff's core: effort vs result
     spring_upthrust: 20
     confirmation: 20            # RS, trend context, volatility contraction, MTF agreement
+
+# §6 Momentum strategy — a trend-following lens, deliberately INDEPENDENT of Wyckoff (which
+# buys bases). Per-timeframe lookbacks (a 50-DAY MA != a 50-WEEK MA). [TUNABLE] seeds.
+momentum:
+  defaults:
+    ma_window: 50               # trend regime: last close vs this simple moving average
+    roc_window: 20              # momentum: rate-of-change lookback (bars)
+  per_timeframe:
+    daily: {}                   # uses defaults
+    weekly:
+      ma_window: 30             # ~30 weeks, not 50
+      roc_window: 12
 
 scoring:
   watchlist_threshold: 70       # 0-100 final composite; >= this gets written out

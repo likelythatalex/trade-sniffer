@@ -22,7 +22,7 @@ from datetime import date
 import pandas as pd
 
 from ..combiner import combine
-from ..config import Config, resolve_wyckoff_params, scoring_window
+from ..config import Config, resolve_strategy_params, scoring_window
 from ..data import fetch_many, fetch_spy
 from ..data_quality import clean
 from ..features import compute_features
@@ -55,7 +55,7 @@ def replay_history(
     strategies = {name: get_strategy(name) for name in enabled}
     weights = {name: spec.weight for name, spec in enabled.items()}
     baseline_window = config.features.baseline_window[timeframe]
-    params = resolve_wyckoff_params(config, timeframe)
+    strategy_params = {name: resolve_strategy_params(config, name, timeframe) for name in strategies}
     start_offset = scoring_window(config, timeframe)  # first bar with full lookback windows
 
     fetched = fetch_many(tickers, timeframe, config, today=today)
@@ -73,11 +73,17 @@ def replay_history(
 
         for i in range(start_offset, len(cleaned), step):
             df_asof = cleaned.iloc[: i + 1]
-            context = StrategyContext(
-                features=features.iloc[: i + 1], params=params, timeframe=timeframe,
-                prior_state=None, benchmark_close=benchmark, config=config,  # MTF not replayed
-            )
-            results = {name: strat.evaluate(df_asof, context) for name, strat in strategies.items()}
+            features_asof = features.iloc[: i + 1]
+            results = {
+                name: strat.evaluate(
+                    df_asof,
+                    StrategyContext(
+                        features=features_asof, params=strategy_params[name], timeframe=timeframe,
+                        prior_state=None, benchmark_close=benchmark, config=config,  # MTF not replayed
+                    ),
+                )
+                for name, strat in strategies.items()
+            }
             composite = combine(results, weights)
             rows.append(_signal_row(ticker, cleaned.index[i], composite))
 

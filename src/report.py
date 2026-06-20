@@ -22,9 +22,11 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from .config import Config
 
 # signals.csv schema (SPEC §8.4). Bump SCHEMA_VERSION + migrate when this changes.
-SCHEMA_VERSION = 1
+# v2: added momentum_score (the 2nd strategy's signed composite; additive — old rows blank).
+SCHEMA_VERSION = 2
 SIGNALS_COLUMNS = (
     "run_ts", "ticker", "timeframe", "direction", "composite_score", "wyckoff_score",
+    "momentum_score",
     "range_score", "volume_score", "spring_score", "confirmation_score",
     "rs_vs_spy", "vol_contraction", "mtf_agree", "trend_context", "data_quality_flag",
     "feat_volume_ratio", "feat_volume_pctile", "feat_spread_atr", "feat_spread_pctile",

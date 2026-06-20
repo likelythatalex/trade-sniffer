@@ -46,6 +46,15 @@ def test_no_direction_yields_empty_levels() -> None:
     assert composite.levels == Levels()
 
 
+def test_zero_weight_strategy_is_inert() -> None:
+    # Momentum ships at weight 0: it's logged but must not move the composite or flip direction.
+    wyckoff = StrategyResult(direction="accumulation", score=80.0, sub_scores={"x": 1.0})
+    momentum = StrategyResult(direction="distribution", score=90.0, sub_scores={"y": 2.0})
+    composite = combine({"wyckoff": wyckoff, "momentum": momentum}, {"wyckoff": 1.0, "momentum": 0.0})
+    assert composite.direction == "accumulation"  # weight-0 momentum can't flip direction
+    assert composite.score == pytest.approx(80.0)  # composite = Wyckoff only
+
+
 def test_empty_results_raises() -> None:
     with pytest.raises(ValueError, match="no strategy results"):
         combine({}, {})

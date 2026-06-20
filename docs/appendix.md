@@ -195,18 +195,21 @@ version. Think of it as a README for the *domain*, not the code.
 - **Plain meaning:** Rather than a yes/no call, rank candidates 0–100; independent signals
   agreeing should raise the score.
 - **How it's implemented here:** Per-strategy `StrategyResult` scores combined in
-  `combiner.combine` (weighted average; direction from the strongest contributor). v1 = one
-  strategy, so composite = Wyckoff score. Confirmation *stacking* across strategies awaits a
-  second strategy.
-- **Status:** `PARTIAL` (`combiner.py`, tested in `tests/test_combiner.py`): aggregation done;
-  multi-strategy stacking/correlation still `FUTURE`.
+  `combiner.combine` (weighted average; direction from the strongest contributor). A **second
+  strategy now exists** — `strategies/momentum.py` (trend regime + ROC), deliberately
+  independent of Wyckoff. It ships at **weight 0**: computed and logged (`momentum_score` in
+  `signals.csv`) but contributing nothing to the composite until its weight is calibrated from
+  accrued data. So the rails for stacking are live; the *weighted* stacking awaits calibration.
+- **Status:** `PARTIAL` (`combiner.py` + `strategies/momentum.py`, tested): aggregation +
+  second strategy done; weighting it (and correlation-awareness) still `FUTURE` (data-gated).
 
 ### Signal Correlation Awareness
 - **Plain meaning:** Stacked signals only add information if they're *independent*; three
   trend-flavored signals agreeing is one signal counted thrice.
-- **How it's implemented here:** Not yet. Designated home is `combiner.py`, using
-  per-strategy scores logged in `signals.csv` to measure pairwise correlation later.
-- **Status:** `FUTURE`.
+- **How it's implemented here:** Not yet, but the **data is now being captured**: `momentum_score`
+  is logged alongside `wyckoff_score`/`composite_score` every run, so pairwise correlation can be
+  measured later. Designated home for the down-weighting logic is `combiner.py`.
+- **Status:** `FUTURE` (now data-gated, not blocked on plumbing).
 
 ### Survivorship Bias
 - **Plain meaning:** Testing only on stocks that exist today overstates results (you've

@@ -29,7 +29,7 @@ from typing import Any
 import pandas as pd
 
 from .combiner import combine
-from .config import Config, load_config, resolve_wyckoff_params
+from .config import Config, load_config, resolve_strategy_params
 from .data import fetch_many, fetch_spy, resolve_exchange
 from .data_quality import QualityReport, clean
 from .features import compute_features
@@ -74,7 +74,8 @@ def run_timeframe(
     strategies = {name: get_strategy(name) for name in enabled}
     weights = {name: spec.weight for name, spec in enabled.items()}
     baseline_window = config.features.baseline_window[timeframe]
-    params = resolve_wyckoff_params(config, timeframe)
+    # Each strategy gets its OWN resolved params (not Wyckoff's) — the multi-strategy plumbing.
+    strategy_params = {name: resolve_strategy_params(config, name, timeframe) for name in strategies}
     run_ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     # Prior state: dedup baseline for THIS timeframe + the OTHER timeframe's MTF read.
@@ -122,17 +123,24 @@ def run_timeframe(
 
             features = compute_features(cleaned, baseline_window)
             other_direction = mtf_direction(state, other_timeframe, ticker)  # None on cold start
-            context = StrategyContext(
-                features=features, params=params, timeframe=timeframe,
-                prior_state=other_direction, benchmark_close=benchmark, config=config,
-            )
-            results = {name: strat.evaluate(cleaned, context) for name, strat in strategies.items()}
+            # Per-strategy context: same features/state, but each strategy's own params.
+            results = {
+                name: strat.evaluate(
+                    cleaned,
+                    StrategyContext(
+                        features=features, params=strategy_params[name], timeframe=timeframe,
+                        prior_state=other_direction, benchmark_close=benchmark, config=config,
+                    ),
+                )
+                for name, strat in strategies.items()
+            }
             composite = combine(results, weights)
 
             made_watchlist = composite.score >= config.scoring.watchlist_threshold
             signal_rows.append(
                 _signals_row(run_ts, ticker, timeframe, composite, results.get("wyckoff"),
-                             features, quality, made_watchlist, other_direction)
+                             features, quality, made_watchlist, other_direction,
+                             momentum=results.get("momentum"))
             )
             if made_watchlist and composite.direction != "none":
                 counts["flagged"] += 1
@@ -358,6 +366,7 @@ def _signals_row(
     quality: QualityReport,
     made_watchlist: bool,
     mtf_direction: str | None = None,
+    momentum: StrategyResult | None = None,
 ) -> dict[str, Any]:
     """Build one signals.csv row (schema ``SIGNALS_COLUMNS``) for an evaluated ticker.
 
@@ -373,6 +382,8 @@ def _signals_row(
         "direction": composite.direction,
         "composite_score": round(composite.score, 2),
         "wyckoff_score": round(wyckoff.score, 2) if wyckoff else "",
+        # Signed momentum composite (independent signal; logged for the correlation study).
+        "momentum_score": _round(momentum.metadata.get("signed")) if momentum else "",
         "range_score": _round(sub.get("range_structure")),
         "volume_score": _round(sub.get("volume_behavior")),
         "spring_score": _round(sub.get("spring_upthrust")),

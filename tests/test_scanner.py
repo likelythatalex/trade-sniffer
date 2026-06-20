@@ -105,6 +105,7 @@ def test_run_timeframe_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert signals.exists()
     lines = signals.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 2  # header + the one evaluated ticker
+    assert "momentum_score" in lines[0]  # 2nd strategy logged (weight 0, but captured)
 
 
 def test_run_timeframe_skips_ticker_with_no_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

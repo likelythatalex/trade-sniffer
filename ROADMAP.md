@@ -107,8 +107,8 @@ here only for visibility/sequencing.
 
 | Item | Status | Detail |
 |---|---|---|
-| Additional strategies (momentum / RS / volatility) | TODO | Each = new file in `strategies/` + config line. SPEC §6, §12. |
-| Confirmation stacking | TODO | Combiner raises conviction when independent strategies agree. SPEC §12. |
+| Additional strategies (momentum / RS / volatility) | IN PROGRESS | **Momentum DONE** (`strategies/momentum.py`: trend regime + ROC, signed, independent of Wyckoff). Shipped at **weight 0** (logged to `signals.csv` as `momentum_score`, inert in the composite) until calibration. This also generalized per-strategy params (`resolve_strategy_params`) so the next strategy is genuinely "a file + a config block". SPEC §6, §12. |
+| Confirmation stacking | TODO (unblocked) | Now possible: two strategies exist + the combiner aggregates them. First needs momentum's weight calibrated from accrued `momentum_score` vs outcomes (data-gated), *then* the correlation-aware weighting below. SPEC §12. |
 | Correlation-awareness in `combiner.py` | TODO | Down-weight correlated strategy clusters (why per-strategy scores are logged). SPEC §12; appendix "Signal Correlation Awareness" (FUTURE). |
 | Crypto mode | TODO | Separate profile (24/7, crypto RS benchmark, crypto symbols/liquidity). Same phase as multi-strategy. SPEC §12. |
 | Telegram notification channel | TODO | Behind the existing `notify.py` interface. SPEC §8.3, §12. |
