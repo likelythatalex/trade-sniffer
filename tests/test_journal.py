@@ -14,11 +14,34 @@ import pytest
 from src.journal import (
     JournalError,
     add_trade,
+    build_trade_review_prompt,
     close_trade,
     evaluate_entries,
     list_trades,
     load_entries,
+    review_closed_trades,
 )
+from src.review import Reviewer
+from src.trade_outcome import TradeOutcome
+
+
+class StubReviewer(Reviewer):
+    """Counts calls so we can assert the post-trade cost controls fire (no network)."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def review(self, prompt: str) -> dict[str, str]:
+        self.calls += 1
+        return {"text": "Process: good\nFollowed the plan.", "verdict": "good"}
+
+
+def _closed(ticker: str, trade_id: int) -> dict:
+    return {
+        "id": trade_id, "opened_date": "2024-06-01", "ticker": ticker, "direction": "long",
+        "entry": "110", "stop": "101", "target": "120", "size": "90", "status": "closed",
+        "exit_date": "2024-06-10", "exit_price": "118", "source": "", "notes": "",
+    }
 
 
 def journal(tmp_path: Path) -> Path:
@@ -131,6 +154,40 @@ def test_evaluate_entries_handles_missing_prices(tmp_path: Path) -> None:
     _add_long(path, "XOM")
     (_, outcome), = evaluate_entries(load_entries(path), {})  # no price data for XOM
     assert outcome is None
+
+
+def test_review_only_closed_trades_capped_and_cached() -> None:
+    outcome = TradeOutcome(resolution="target", realized_r=1.1, mfe_r=1.3, mae_r=0.4, bars_held=6)
+    paired = [
+        (_closed("AAA", 1), outcome),
+        (_closed("BBB", 2), outcome),
+        ({**_closed("CCC", 3), "status": "open"}, None),  # open -> never reviewed
+    ]
+    stub = StubReviewer()
+    cache = review_closed_trades(paired, stub, cache={}, max_reviews=5)
+    assert stub.calls == 2  # only the two CLOSED trades
+    assert set(cache) == {"1", "2"} and cache["1"]["ticker"] == "AAA"
+
+    # Re-run with the cache populated: nothing re-spent.
+    again = review_closed_trades(paired, stub, cache=cache, max_reviews=5)
+    assert stub.calls == 2  # unchanged
+    assert set(again) == {"1", "2"}
+
+
+def test_review_respects_per_run_cap() -> None:
+    paired = [(_closed(f"T{i}", i), None) for i in range(5)]
+    stub = StubReviewer()
+    cache = review_closed_trades(paired, stub, cache={}, max_reviews=2)
+    assert stub.calls == 2 and len(cache) == 2  # hard cap honored
+
+
+def test_build_trade_review_prompt_includes_evidence() -> None:
+    outcome = TradeOutcome(resolution="stop", realized_r=-1.0, mfe_r=0.5, mae_r=1.2, bars_held=4)
+    prompt = build_trade_review_prompt(_closed("XOM", 1), outcome)
+    assert "XOM" in prompt and "long" in prompt
+    assert "planned R:R" in prompt
+    assert "actual" in prompt and "+0.89R" in prompt  # (118-110)/9 from the recorded exit
+    assert "stop after 4 bars" in prompt
 
 
 def test_round_trip_preserves_fields(tmp_path: Path) -> None:

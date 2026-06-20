@@ -59,12 +59,26 @@ class Reviewer(ABC):
 
 
 class AnthropicReviewer(Reviewer):
-    """Calls the Anthropic Messages API over REST (no SDK dependency)."""
+    """Calls the Anthropic Messages API over REST (no SDK dependency).
 
-    def __init__(self, model: str, api_key: str, max_tokens: int) -> None:
+    The ``system_prompt`` + ``verdicts`` are injected so the same client serves both the
+    signal due-diligence review (default) and the journal's post-trade reflection (§8A.2) —
+    one HTTP client, two rubrics.
+    """
+
+    def __init__(
+        self,
+        model: str,
+        api_key: str,
+        max_tokens: int,
+        system_prompt: str = SYSTEM_PROMPT,
+        verdicts: tuple[str, ...] = _VERDICTS,
+    ) -> None:
         self._model = model
         self._api_key = api_key
         self._max_tokens = max_tokens
+        self._system_prompt = system_prompt
+        self._verdicts = verdicts
 
     def review(self, prompt: str) -> dict[str, str]:
         import requests  # lazy: only needed when the reviewer actually runs
@@ -79,14 +93,14 @@ class AnthropicReviewer(Reviewer):
             json={
                 "model": self._model,
                 "max_tokens": self._max_tokens,
-                "system": SYSTEM_PROMPT,
+                "system": self._system_prompt,
                 "messages": [{"role": "user", "content": prompt}],
             },
             timeout=30,
         )
         response.raise_for_status()
         text = response.json()["content"][0]["text"].strip()
-        return {"text": text, "verdict": parse_verdict(text)}
+        return {"text": text, "verdict": parse_verdict(text, self._verdicts)}
 
 
 def make_reviewer(config: ReviewConfig, api_key: str | None) -> Reviewer | None:
@@ -185,10 +199,11 @@ def build_review_prompt(card: dict[str, Any]) -> str:
     )
 
 
-def parse_verdict(text: str) -> str:
-    """Lenient: pull the verdict word from the first line; default 'n/a'."""
+def parse_verdict(text: str, verdicts: tuple[str, ...] = _VERDICTS) -> str:
+    """Lenient: pull the verdict word from the first line; default 'n/a'. ``verdicts`` is the
+    vocabulary to look for (signal review vs the post-trade reflection use different words)."""
     first = text.strip().splitlines()[0].lower() if text.strip() else ""
-    return next((v for v in _VERDICTS if v in first), "n/a")
+    return next((v for v in verdicts if v in first), "n/a")
 
 
 # --- Cache I/O (tolerant, like state.py) --------------------------------------

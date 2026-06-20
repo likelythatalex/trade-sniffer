@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import logging
 from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
@@ -23,9 +24,31 @@ from typing import Any
 
 import pandas as pd
 
+from .review import Reviewer, load_reviews, save_reviews
 from .trade_outcome import TradeOutcome, evaluate_outcome
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_JOURNAL_PATH = Path("journal.csv")  # repo root, gitignored (never committed/published)
+TRADE_REVIEWS_PATH = Path("trade_reviews.json")  # gitignored cache of post-trade reflections
+
+# The post-trade reflection rubric — distinct from the signal reviewer's (review.SYSTEM_PROMPT).
+# It judges PROCESS separately from OUTCOME (a good process can lose; a bad one can win).
+POST_TRADE_VERDICTS = ("good", "mixed", "poor")
+POST_TRADE_SYSTEM_PROMPT = (
+    "You are a trading-journal reflection assistant. Given one CLOSED trade — its plan, the "
+    "recorded exit, and how price actually behaved — write a concise, objective post-mortem for "
+    "the trader's private journal. Separate PROCESS (was the setup sound and the plan followed?) "
+    "from OUTCOME (a single win/loss can be luck): a good process can lose and a bad one can win "
+    "— judge the process. Note what went well, what didn't, and one concrete repeatable lesson.\n\n"
+    "IMPORTANT: Do NOT give advice about future trades or what to buy/sell — these are reflective "
+    "notes on a PAST trade.\n\n"
+    "Output format:\n"
+    "Process: <good|mixed|poor>   (setup + execution quality, independent of P/L)\n"
+    "<2-4 sentence reflection>\n"
+    "Lessons:\n"
+    "- <1 to 3 short bullets>"
+)
 
 # Trade-centric directions (the journal is about trades, not signals). The signal terms
 # accumulation/distribution map onto these for convenience when copying from the dashboard.
@@ -191,6 +214,76 @@ def _bars_after(df: pd.DataFrame, opened_date: str) -> pd.DataFrame:
     return df[df.index > pd.Timestamp(opened_date)]
 
 
+# --- post-trade reflection (PRIVATE; reuses the Reviewer interface) ------------
+
+
+def review_closed_trades(
+    entries_with_outcomes: list[tuple[dict[str, Any], TradeOutcome | None]],
+    reviewer: Reviewer,
+    cache: dict[str, Any],
+    max_reviews: int,
+) -> dict[str, Any]:
+    """Generate a private post-trade reflection for each CLOSED, not-yet-reviewed trade,
+    capped at ``max_reviews`` LLM calls, and return the updated cache (keyed by trade id).
+
+    Reviewer is injected (stub in tests). Fail-soft: a failed review is skipped, never fatal.
+    Closed-only because reflection needs a finished trade; cached so re-runs never re-spend.
+    """
+    pending = [
+        (entry, outcome)
+        for entry, outcome in entries_with_outcomes
+        if entry.get("status") == "closed" and str(entry["id"]) not in cache
+    ]
+    for entry, outcome in pending[:max_reviews]:
+        try:
+            result = reviewer.review(build_trade_review_prompt(entry, outcome))
+        except Exception:  # fail soft: a review failure never breaks the command
+            logger.exception("post-trade review failed for trade %s", entry["id"])
+            continue
+        cache[str(entry["id"])] = {**result, "ticker": entry["ticker"]}
+    return cache
+
+
+def build_trade_review_prompt(entry: dict[str, Any], outcome: TradeOutcome | None) -> str:
+    """Compact, structured evidence for one closed trade (kept small to bound tokens)."""
+    risk = abs(float(entry["entry"]) - float(entry["stop"]))
+    planned_rr = abs(float(entry["target"]) - float(entry["entry"])) / risk if risk > 0 else float("nan")
+    lines = [
+        f"Trade: {entry['ticker']} {entry['direction']}, opened {entry['opened_date']}"
+        + (f", source {entry['source']}" if entry.get("source") else ""),
+        f"Plan: entry {entry['entry']}, stop {entry['stop']}, target {entry['target']} "
+        f"(planned R:R {planned_rr:.2f})",
+    ]
+    if entry.get("exit_price"):
+        actual = _actual_realized_r(entry)
+        lines.append(
+            f"Recorded exit: {entry['exit_price']} on {entry.get('exit_date', '?')}"
+            + (f" (actual {actual:+.2f}R)" if actual is not None else "")
+        )
+    if outcome is not None:
+        plan_r = "n/a" if outcome.realized_r is None else f"{outcome.realized_r:+.2f}R"
+        lines.append(
+            f"Price path: {outcome.resolution} after {outcome.bars_held} bars; "
+            f"plan-realized {plan_r}; MFE {outcome.mfe_r:.2f}R; MAE {outcome.mae_r:.2f}R"
+        )
+    else:
+        lines.append("Price path: no data available")
+    if entry.get("notes"):
+        lines.append(f"Trader notes: {entry['notes']}")
+    lines.append("\nReflect on this closed trade per your rubric.")
+    return "\n".join(lines)
+
+
+def _actual_realized_r(entry: dict[str, Any]) -> float | None:
+    """Realized R from the trader's RECORDED exit (vs the plan-simulated outcome)."""
+    risk = abs(float(entry["entry"]) - float(entry["stop"]))
+    if risk <= 0 or not entry.get("exit_price"):
+        return None
+    exit_price = float(entry["exit_price"])
+    move = (exit_price - float(entry["entry"])) if entry["direction"] == "long" else (float(entry["entry"]) - exit_price)
+    return move / risk
+
+
 # --- CLI (local, manual) ------------------------------------------------------
 
 
@@ -239,6 +332,7 @@ def main(argv: list[str] | None = None) -> None:
     p_close.add_argument("--notes", default=None)
 
     sub.add_parser("report", help="evaluate each trade's outcome vs price history (fetches data)")
+    sub.add_parser("review", help="private post-trade reflection on closed trades (needs API key)")
 
     args = parser.parse_args(argv)
     path = Path(args.file)
@@ -263,6 +357,8 @@ def main(argv: list[str] | None = None) -> None:
             print("closed", _format_row(row))
         elif args.command == "report":
             _run_report(path)
+        elif args.command == "review":
+            _run_review(path)
     except JournalError as exc:
         parser.error(str(exc))
 
@@ -283,6 +379,48 @@ def _run_report(path: Path) -> None:
     prices = {ticker: result.df for ticker, result in fetched.items()}
     for entry, outcome in evaluate_entries(entries, prices):
         print(_format_outcome(entry, outcome))
+
+
+def _run_review(path: Path) -> None:
+    """Private post-trade reflection on CLOSED trades: fetch prices, evaluate outcomes, ask the
+    LLM for a process-vs-outcome post-mortem (capped + cached), and print. Local-only; the
+    reviews cache (`trade_reviews.json`) is gitignored. Explicit command, so it only needs the
+    API key (no review.enabled gate)."""
+    import os
+
+    from .config import load_config
+    from .data import fetch_many
+    from .review import AnthropicReviewer
+
+    config = load_config()
+    api_key = os.environ.get(config.review.api_key_env)
+    if not api_key:
+        print(f"set {config.review.api_key_env} to enable private post-trade reviews")
+        return
+    entries = load_entries(path)
+    if not any(e.get("status") == "closed" for e in entries):
+        print("(no closed trades to review)")
+        return
+
+    tickers = sorted({e["ticker"] for e in entries})
+    fetched = fetch_many(tickers, "daily", config)
+    prices = {ticker: result.df for ticker, result in fetched.items()}
+    paired = evaluate_entries(entries, prices)
+
+    reviewer = AnthropicReviewer(
+        config.review.model, api_key, config.review.max_tokens,
+        system_prompt=POST_TRADE_SYSTEM_PROMPT, verdicts=POST_TRADE_VERDICTS,
+    )
+    cache = load_reviews(TRADE_REVIEWS_PATH)
+    cache = review_closed_trades(paired, reviewer, cache, config.review.max_reviews_per_run)
+    save_reviews(TRADE_REVIEWS_PATH, cache)
+
+    for entry, _ in paired:
+        if entry.get("status") != "closed":
+            continue
+        review = cache.get(str(entry["id"]))
+        if review:
+            print(f"#{entry['id']} {entry['ticker']} [{review.get('verdict', 'n/a')}]\n{review.get('text', '')}\n")
 
 
 if __name__ == "__main__":

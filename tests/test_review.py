@@ -12,6 +12,7 @@ from pathlib import Path
 
 from src import config as config_module
 from src.review import (
+    AnthropicReviewer,
     Reviewer,
     build_review_prompt,
     load_reviews,
@@ -57,6 +58,22 @@ def test_parse_verdict() -> None:
     assert parse_verdict("Verdict: ALIGNED") == "aligned"
     assert parse_verdict("no verdict line") == "n/a"
     assert parse_verdict("") == "n/a"
+
+
+def test_parse_verdict_custom_vocabulary() -> None:
+    # The post-trade reflection uses a different vocabulary (good/mixed/poor).
+    vocab = ("good", "mixed", "poor")
+    assert parse_verdict("Process: good\n...", vocab) == "good"
+    assert parse_verdict("Process: POOR", vocab) == "poor"
+    assert parse_verdict("Verdict: aligned", vocab) == "n/a"  # signal word not in this vocab
+
+
+def test_anthropic_reviewer_injects_prompt_and_verdicts() -> None:
+    # Same HTTP client, two rubrics: the system prompt + verdict vocab are injectable.
+    r = AnthropicReviewer("m", "key", 100, system_prompt="REFLECT", verdicts=("good", "poor"))
+    assert r._system_prompt == "REFLECT" and r._verdicts == ("good", "poor")
+    default = AnthropicReviewer("m", "key", 100)
+    assert default._verdicts == ("aligned", "mixed", "skeptical")  # signal default preserved
 
 
 def test_build_review_prompt_includes_evidence() -> None:

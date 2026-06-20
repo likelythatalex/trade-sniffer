@@ -65,12 +65,12 @@ Detail/status per concept lives in `appendix.md`; definitions in `wyckoff_method
 | **Discord static chart PNG preview** | TODO | Glanceable image attached to the notification (the dashboard stays the inspection surface). SPEC §12. |
 | **Dashboard: toggle to view recently failed setups** | TODO | Review/reflect affordance — show recently *invalidated* setups, not just current qualifiers. Scanner already classifies `failed`; surface those cards behind a UI toggle. Optionally feed the reviewer the setup's `transition`/episode history so a re-flagged setup is reviewed in context (the agent currently sees only the as-of snapshot). |
 
-## Active build — Trade layer (planner + local journal)
+## Trade layer (planner + local journal) — COMPLETE
 
-The current focus. A second seam parallel to `Strategy` (signal-agnostic): turn a signal into
-an actionable but **never-executed** plan, journal the trades you'd take (locally/privately),
-and reflect on closed ones. Design + decisions: **SPEC §8A**. Loop: `signal → plan → journal
-→ outcome → reflect`. Built incrementally, each step tested + green before the next.
+A second seam parallel to `Strategy` (signal-agnostic): turn a signal into an actionable but
+**never-executed** plan, journal the trades you'd take (locally/privately), and reflect on
+closed ones. Design + decisions: **SPEC §8A**. Loop: `signal → plan → journal → outcome →
+reflect` — now closed end to end. All steps tested + green; built incrementally.
 
 | Step | Status | Detail |
 |---|---|---|
@@ -80,7 +80,7 @@ and reflect on closed ones. Design + decisions: **SPEC §8A**. Loop: `signal →
 | 3. Dashboard render of the plan | DONE | `scanner._plan_data` attaches the suggested plan to each flagged card; the template shows entry/stop/target/R:R/size + the management playbook and draws entry/stop/target as solid price lines on the chart (range band stays dashed). Display-only, public (no personal data). |
 | 4. `journal.py` + CLI (PRIVATE) | DONE | Local-only, gitignored (`journal.csv`), never in CI. `add` / `list` / `close` trades via `python -m src.journal …`; tolerant CSV store rewritten on mutate, direction aliases + fail-fast validation. Data layer only — outcomes/AI are steps 5-6. SPEC §8A.2. |
 | 5. Journal auto-outcome | DONE | Shared pure `trade_outcome.py` (path-dependent: stop-vs-target-first, realized R, MFE/MAE; conservative both-in-one-bar tie-break, forward-bars-only). `journal evaluate_entries` (prices injected) + `journal report` CLI (fetches daily). Outcomes derived, not stored. Same evaluator the Tier-3 policy sweep will reuse. SPEC §8A.2. |
-| 6. Post-trade agent review (PRIVATE) | TODO | Reuse the `Reviewer` ABC with a reflection prompt; runs locally; sends trade detail to the API from your machine only. |
+| 6. Post-trade agent review (PRIVATE) | DONE | `journal review`: reuses `AnthropicReviewer` with a reflection rubric (judges PROCESS vs OUTCOME; verdict good/mixed/poor) on CLOSED trades. `review_closed_trades` (stub-injected) is closed-only, per-run capped, cached in gitignored `trade_reviews.json`; needs the API key (no enabled gate — explicit command), fail-soft, never advice. SPEC §8A.2. |
 
 ## Tier 5 — Future phases & architecture
 

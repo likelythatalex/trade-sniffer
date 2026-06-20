@@ -99,6 +99,26 @@ secret. It's **cost-bounded** for the public repo: NEW transitions only, a hard
 `reviews.json` cache (keyed `timeframe:ticker`) so continuing setups and same-day re-runs never
 re-spend. No key or a failed call simply omits the review.
 
+## Private trade journal (local-only)
+
+The dashboard suggests a plan (entry/stop/target/size + a management playbook) for each
+flagged setup — **suggestions for human review, never executed.** To track the trades you'd
+actually take, there's a **local, private** journal CLI. It writes to a **gitignored**
+`journal.csv` and runs only on your machine — never committed, never published, never in CI
+(the repo is public, so trades stay off it by design).
+
+```bash
+python -m src.journal add KO short 73.59 79.48 63.69 170 --source "wyckoff daily"  # ticker dir entry stop target size
+python -m src.journal list --status open
+python -m src.journal close 1 64.10 --notes "hit target"
+python -m src.journal report     # outcome of each trade vs price history (stop/target-first, realized R, MFE/MAE)
+python -m src.journal review     # private post-trade reflection on closed trades (needs ANTHROPIC_API_KEY)
+```
+
+`review` reuses the agent reviewer with a reflection rubric that judges **process vs outcome**
+(a good process can lose, a bad one can win); it's capped, cached (gitignored
+`trade_reviews.json`), and **never gives trading advice** — reflective notes on past trades only.
+
 ## Editing the universe
 
 [universe.txt](universe.txt) — one bare ticker per line (no exchange prefix), `#` for comments.
