@@ -115,10 +115,17 @@ class TradePlanConfig:
 
     account_notional: float  # $ notional used ONLY to scale the suggested size; nothing trades
     risk_pct: float          # % of notional risked per trade (1% = standard)
-    stop_buffer_pct: float   # % beyond the structural invalidation (spring/upthrust) for the stop
+    stop_method: str         # how the stop is placed: "capped" | "structural" | "atr" (R:R lever)
+    stop_buffer_pct: float   # structural: % beyond the invalidation (spring/upthrust)
+    max_stop_pct: float      # capped: stop no further than this % from entry (the R:R cap)
+    stop_atr_mult: float     # atr: stop this × ATR from entry
     breakeven_at_r: float    # management: move stop to entry at +this many R
     scale_out_pct: float     # management: take this % off at the measured-move target
     trail_atr_mult: float    # management: trail the remaining runner by this × ATR
+
+
+#: Valid trade-plan stop methods (kept here so config validation and the planner agree).
+STOP_METHODS = ("capped", "structural", "atr")
 
 
 @dataclass(frozen=True)
@@ -289,7 +296,10 @@ def _build_config(raw: dict) -> Config:
         trade_plan=TradePlanConfig(
             account_notional=float(_require(trade_plan, "account_notional", "trade_plan.")),
             risk_pct=float(_require(trade_plan, "risk_pct", "trade_plan.")),
+            stop_method=str(_require(trade_plan, "stop_method", "trade_plan.")),
             stop_buffer_pct=float(_require(trade_plan, "stop_buffer_pct", "trade_plan.")),
+            max_stop_pct=float(_require(trade_plan, "max_stop_pct", "trade_plan.")),
+            stop_atr_mult=float(_require(trade_plan, "stop_atr_mult", "trade_plan.")),
             breakeven_at_r=float(_require(trade_plan, "breakeven_at_r", "trade_plan.")),
             scale_out_pct=float(_require(trade_plan, "scale_out_pct", "trade_plan.")),
             trail_atr_mult=float(_require(trade_plan, "trail_atr_mult", "trade_plan.")),
@@ -367,6 +377,12 @@ def _validate(config: Config) -> None:
         raise ConfigError(f"trade_plan.risk_pct must be in (0, 100] (got {tp.risk_pct}).")
     if tp.stop_buffer_pct < 0:
         raise ConfigError(f"trade_plan.stop_buffer_pct must be >= 0 (got {tp.stop_buffer_pct}).")
+    if tp.stop_method not in STOP_METHODS:
+        raise ConfigError(f"trade_plan.stop_method must be one of {STOP_METHODS} (got '{tp.stop_method}').")
+    if tp.max_stop_pct <= 0:
+        raise ConfigError(f"trade_plan.max_stop_pct must be > 0 (got {tp.max_stop_pct}).")
+    if tp.stop_atr_mult <= 0:
+        raise ConfigError(f"trade_plan.stop_atr_mult must be > 0 (got {tp.stop_atr_mult}).")
     if not (0 <= tp.scale_out_pct <= 100):
         raise ConfigError(f"trade_plan.scale_out_pct must be in [0, 100] (got {tp.scale_out_pct}).")
 

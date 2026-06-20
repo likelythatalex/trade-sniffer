@@ -33,12 +33,15 @@ class Levels:
         range_low: bottom of the trading range (support band).
         spring_low: deepest false-break low below support → the accumulation invalidation.
         upthrust_high: highest false-break high above resistance → the distribution invalidation.
+        atr: recent average true range (price units) — the volatility measure the planner's
+            ATR-based stop method uses. ``None`` when not computable.
     """
 
     range_high: float | None = None
     range_low: float | None = None
     spring_low: float | None = None
     upthrust_high: float | None = None
+    atr: float | None = None
 
 
 @dataclass

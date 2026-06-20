@@ -8,7 +8,11 @@ human review).
 
 Policy (all ``[TUNABLE]`` seeds in ``config.trade_plan``):
 - **Entry**  — confirmation break of the range edge in the signal's direction.
-- **Stop**   — structural invalidation (spring low / upthrust high, else the range edge) + buffer.
+- **Stop**   — a *selectable* method (``capped`` | ``structural`` | ``atr``) — the reward:risk
+  lever. ``structural`` stops at the invalidation (spring/upthrust) + buffer (wide, R:R ~1);
+  ``capped`` pulls that in to at most ``max_stop_pct`` from entry (healthier R:R, but the stop
+  then sits inside structure so it's more exposed to noise); ``atr`` sizes the stop off
+  volatility. Selectable so a future sweep can *tune* the policy (SPEC §8A.1).
 - **Target** — measured move: the range height projected from the breakout.
 - **Size**   — account-risk %: risk a fixed % of a notional account across the stop distance.
 - **Manage** — breakeven at +Nr, scale out at target, trail the runner (written rules, not executed).
@@ -65,15 +69,14 @@ def plan_trade(direction: str, levels: Levels, cfg: TradePlanConfig) -> TradePla
 
     if direction == _LONG:
         entry = levels.range_high  # confirmation break above resistance
-        invalidation = levels.spring_low if levels.spring_low is not None else levels.range_low
-        stop = invalidation * (1.0 - cfg.stop_buffer_pct / 100.0)  # buffer below
         target = entry + range_height  # measured move up
     else:
         entry = levels.range_low  # confirmation break below support
-        invalidation = levels.upthrust_high if levels.upthrust_high is not None else levels.range_high
-        stop = invalidation * (1.0 + cfg.stop_buffer_pct / 100.0)  # buffer above
         target = entry - range_height  # measured move down
 
+    stop = _compute_stop(direction, entry, levels, cfg)
+    if stop is None:
+        return None  # chosen stop method couldn't be applied (e.g. atr method, no ATR)
     risk_per_share = abs(entry - stop)
     if risk_per_share <= 0:
         return None  # entry and stop coincide -> can't size
@@ -94,6 +97,31 @@ def plan_trade(direction: str, levels: Levels, cfg: TradePlanConfig) -> TradePla
         position_value=size_shares * entry,
         management=_management_playbook(target, cfg),
     )
+
+
+def _compute_stop(direction: str, entry: float, levels: Levels, cfg: TradePlanConfig) -> float | None:
+    """Place the stop per the selected method. ``capped`` (default) takes the structural stop
+    but pulls it in to at most ``max_stop_pct`` from entry; ``structural`` uses the full
+    invalidation + buffer; ``atr`` sizes off volatility. ``None`` if the method can't apply
+    (atr method with no ATR) — the planner then abstains rather than guessing."""
+    if direction == _LONG:
+        invalidation = levels.spring_low if levels.spring_low is not None else levels.range_low
+        structural = invalidation * (1.0 - cfg.stop_buffer_pct / 100.0)  # buffer below
+        if cfg.stop_method == "structural":
+            return structural
+        if cfg.stop_method == "atr":
+            return None if levels.atr is None else entry - cfg.stop_atr_mult * levels.atr
+        # capped: no further than max_stop_pct below entry (pull the stop UP toward entry)
+        return max(structural, entry * (1.0 - cfg.max_stop_pct / 100.0))
+
+    invalidation = levels.upthrust_high if levels.upthrust_high is not None else levels.range_high
+    structural = invalidation * (1.0 + cfg.stop_buffer_pct / 100.0)  # buffer above
+    if cfg.stop_method == "structural":
+        return structural
+    if cfg.stop_method == "atr":
+        return None if levels.atr is None else entry + cfg.stop_atr_mult * levels.atr
+    # capped: no further than max_stop_pct above entry (pull the stop DOWN toward entry)
+    return min(structural, entry * (1.0 + cfg.max_stop_pct / 100.0))
 
 
 def _management_playbook(target: float, cfg: TradePlanConfig) -> list[str]:

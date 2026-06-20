@@ -30,6 +30,7 @@ RS_FULL_SCALE = 0.10  # [TUNABLE] out/under-performance vs SPY over the lookback
 CONTRACTION_FULL_SCALE = 0.5  # [TUNABLE] recent vol this fraction below earlier vol = full coil
 SPRING_BASE_FRACTION = 0.5  # [TUNABLE] a detected spring/upthrust scores at least this much;
 #                              wick rejection + volume corroboration fill the rest to full.
+ATR_WINDOW = 14  # [TUNABLE] standard ATR lookback; the volatility measure the planner stop uses.
 
 _SUB_SCORES = ("range_structure", "volume_behavior", "spring_upthrust", "confirmation")
 
@@ -44,6 +45,8 @@ class WyckoffStrategy(Strategy):
         features = context.features
         range_info = detect_trading_range(df, features, params)
 
+        atr = _recent_atr(df, ATR_WINDOW)
+
         # Precondition: no valid range -> not a Wyckoff setup. Score 0, direction none.
         if not range_info["valid"]:
             return StrategyResult(
@@ -52,7 +55,7 @@ class WyckoffStrategy(Strategy):
                 sub_scores={name: 0.0 for name in _SUB_SCORES},
                 reasons=["no valid trading range"],
                 metadata={"range": range_info},
-                levels=Levels(range_high=range_info["range_high"], range_low=range_info["range_low"]),
+                levels=Levels(range_high=range_info["range_high"], range_low=range_info["range_low"], atr=atr),
             )
 
         volume_score, volume_reasons = score_volume_behavior(df, features, range_info, params)
@@ -85,6 +88,7 @@ class WyckoffStrategy(Strategy):
             range_low=range_info["range_low"],
             spring_low=spring["spring_low"],        # None unless a spring was detected
             upthrust_high=spring["upthrust_high"],  # None unless an upthrust was detected
+            atr=atr,
         )
         return StrategyResult(
             direction=direction,
@@ -489,6 +493,22 @@ def score_vol_contraction(
 
 
 # --- small helpers ---
+
+
+def _recent_atr(df: pd.DataFrame, window: int) -> float | None:
+    """Average true range (gap-aware) over the last ``window`` bars, in price units — the
+    volatility the planner's ATR stop method sizes against. ``None`` on a degenerate series."""
+    n = min(int(window), len(df))
+    if n < 1:
+        return None
+    high = df["high"].iloc[-n:]
+    low = df["low"].iloc[-n:]
+    prev_close = df["close"].shift(1).iloc[-n:]
+    true_range = pd.concat(
+        [high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1
+    ).max(axis=1)
+    atr = float(true_range.mean())
+    return atr if (pd.notna(atr) and atr > 0) else None
 
 
 def _last(features: pd.DataFrame, column: str) -> float:

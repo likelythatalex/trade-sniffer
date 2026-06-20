@@ -104,7 +104,14 @@ scoring:
 trade_plan:
   account_notional: 100000      # $ notional used ONLY to scale the suggested size; nothing trades
   risk_pct: 1.0                 # [TUNABLE] % of notional risked per trade (1% = standard)
-  stop_buffer_pct: 0.5          # [TUNABLE] % beyond the structural invalidation (spring/upthrust)
+  # Stop placement is the main reward:risk lever (a selectable, TUNABLE method):
+  #   capped     = structural stop, but pulled in to <= max_stop_pct from entry (healthier R:R)
+  #   structural = full structural invalidation (spring/upthrust) + buffer (wide stop, R:R ~1)
+  #   atr        = entry -/+ stop_atr_mult x ATR (volatility-sized, ignores structure)
+  stop_method: capped           # [TUNABLE] capped | structural | atr
+  stop_buffer_pct: 0.5          # [TUNABLE] structural: % beyond the invalidation (spring/upthrust)
+  max_stop_pct: 8.0             # [TUNABLE] capped: stop no further than this % from entry
+  stop_atr_mult: 2.0            # [TUNABLE] atr: stop this x ATR from entry
   # management playbook — rules written into the plan, NEVER auto-executed:
   breakeven_at_r: 1.0           # [TUNABLE] move stop to entry once price reaches +this many R
   scale_out_pct: 50             # [TUNABLE] take this % off at the measured-move target

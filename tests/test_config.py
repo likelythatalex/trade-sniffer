@@ -149,6 +149,12 @@ def test_trade_plan_rejects_bad_scale_out(raw_config: dict, tmp_path: Path) -> N
         config.load_config(write_config(tmp_path, raw_config))
 
 
+def test_trade_plan_rejects_unknown_stop_method(raw_config: dict, tmp_path: Path) -> None:
+    raw_config["trade_plan"]["stop_method"] = "trailing_magic"  # not a known method
+    with pytest.raises(ConfigError, match="stop_method"):
+        config.load_config(write_config(tmp_path, raw_config))
+
+
 def test_missing_required_key_rejected(raw_config: dict, tmp_path: Path) -> None:
     del raw_config["timeframes"]
     with pytest.raises(ConfigError, match="timeframes"):

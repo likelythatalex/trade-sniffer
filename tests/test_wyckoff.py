@@ -302,6 +302,7 @@ def test_evaluate_populates_structural_levels_for_planner() -> None:
     assert accum.levels.range_low == 96.0
     assert accum.levels.spring_low == 96.0
     assert accum.levels.upthrust_high is None
+    assert accum.levels.atr is not None and accum.levels.atr > 0  # for the planner's ATR stop
 
     # Distribution mirror: an upthrust poke to 114 -> upthrust_high, no spring_low.
     distrib = WyckoffStrategy().evaluate(distribution_df(), context_for(distribution_df(), make_params()))

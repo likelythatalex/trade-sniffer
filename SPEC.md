@@ -589,7 +589,13 @@ on `(direction, levels, config)` and **abstains** (`None`) on a degenerate setup
 raising — the same fail-soft contract as the rest of the pipeline.
 
 - **Entry:** confirmation break of the range edge in the signal's direction.
-- **Stop:** structural invalidation (spring low / upthrust high) + an ATR/% buffer.
+- **Stop:** a **selectable method** (`stop_method`) — the reward:risk lever. `capped`
+  (default) takes the structural invalidation (spring low / upthrust high, else the range
+  edge) + buffer but pulls it in to at most `max_stop_pct` from entry, for a healthier R:R
+  (the trade-off: a capped stop sits inside structure, so it's more exposed to noise);
+  `structural` keeps the full invalidation + buffer (wide stop, R:R ~1); `atr` sizes the stop
+  off `Levels.atr`. Selectable so a future sweep can *tune* the policy. (Entry/target stay
+  single-method for now — they parameterize the same way when a 2nd method is wanted; YAGNI.)
 - **Target:** measured move (range height projected from the break).
 - **Sizing:** account-risk % — `size = (account_notional × risk_pct) / stop_distance`.
   Defaults **1% on a $100k notional** (notional only scales the displayed size; nothing trades).
