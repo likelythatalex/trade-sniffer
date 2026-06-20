@@ -87,6 +87,8 @@ def run_timeframe(
     cards: list[dict[str, Any]] = []
     signal_rows: list[dict[str, Any]] = []
     current_qualifying: dict[str, dict[str, Any]] = {}
+    skipped_detail: list[tuple[str, str]] = []  # (ticker, reason) — surfaced in the run summary
+    errored_detail: list[str] = []
 
     # Batch-fetch the whole universe up front (one threaded call, far faster at scale);
     # a ticker that returned no data is simply absent and gets skipped below.
@@ -98,14 +100,14 @@ def run_timeframe(
         fetched = fetched_all.get(ticker)
         if fetched is None:
             counts["skipped"] += 1
-            logger.info("skip %s: no data", ticker)
+            skipped_detail.append((ticker, "no data"))
             continue
         try:
             if apply_liquidity_gate:
                 passes, reason = passes_liquidity_gate(fetched.df, config.liquidity)
                 if not passes:
                     counts["skipped"] += 1
-                    logger.info("skip %s: %s", ticker, reason)
+                    skipped_detail.append((ticker, reason))
                     continue
 
             cleaned, quality = clean(
@@ -113,7 +115,7 @@ def run_timeframe(
             )
             if quality.excluded:
                 counts["skipped"] += 1
-                logger.info("skip %s: %s", ticker, quality.reason)
+                skipped_detail.append((ticker, quality.reason or "data quality"))
                 continue
 
             features = compute_features(cleaned, baseline_window)
@@ -138,14 +140,22 @@ def run_timeframe(
 
         except Exception:  # fail soft: one bad ticker never kills the run (SPEC §10)
             counts["errored"] += 1
+            errored_detail.append(ticker)
             logger.exception("error evaluating %s", ticker)
+
+    # Surface WHY names dropped (consolidated, not one line per ticker buried in the log).
+    if skipped_detail:
+        logger.info("skipped %d: %s", len(skipped_detail), "; ".join(f"{t} ({r})" for t, r in skipped_detail))
+    if errored_detail:
+        logger.info("errored %d: %s", len(errored_detail), ", ".join(errored_detail))
 
     # Dedup transitions vs the prior run of THIS timeframe, then stamp each logged row.
     transitions = classify_transitions(prior_qualifying, set(current_qualifying))
     for row in signal_rows:
         row["transition"] = transitions.get(row["ticker"], "none")
 
-    render_dashboard(cards, timeframe, config, today=today, summary=counts)
+    summary = {**counts, "skipped_detail": skipped_detail, "errored_detail": errored_detail}
+    render_dashboard(cards, timeframe, config, today=today, summary=summary)
     write_index_page(config)  # gh-pages landing page so the bare Pages URL isn't a 404
     if config.output.write_tv_import_file:
         write_tv_import_file(cards, timeframe, config)

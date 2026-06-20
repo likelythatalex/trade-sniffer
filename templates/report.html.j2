@@ -53,6 +53,14 @@
       · skipped {{ summary.skipped | default('?') }}
       · errored {{ summary.errored | default('?') }}
     </p>
+    {% if summary.skipped_detail %}
+    <details class="summary">
+      <summary>{{ summary.skipped_detail | length }} skipped — why</summary>
+      <ul>
+        {% for ticker, reason in summary.skipped_detail %}<li>{{ ticker }} — {{ reason }}</li>{% endfor %}
+      </ul>
+    </details>
+    {% endif %}
   </header>
 
   {% macro render_card(c) %}

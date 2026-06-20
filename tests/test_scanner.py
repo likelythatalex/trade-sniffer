@@ -91,6 +91,9 @@ def test_run_timeframe_skips_ticker_with_no_data(tmp_path: Path, monkeypatch: py
 
     counts = scanner.run_timeframe("daily", cfg, today=date(2024, 6, 1))
     assert counts["scanned"] == 1 and counts["skipped"] == 1
+    # The skip reason is surfaced on the dashboard, not just buried in the logs.
+    report = (Path(cfg.output.dir) / "latest_daily.html").read_text(encoding="utf-8")
+    assert "BAD" in report and "no data" in report
 
 
 def test_run_timeframe_fail_soft_on_eval_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
