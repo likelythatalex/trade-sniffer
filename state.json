@@ -1,30 +1,10 @@
 {
   "daily": {
-    "run_ts": "2026-06-19T22:55:03+00:00",
+    "run_ts": "2026-06-20T05:09:16+00:00",
     "qualifying": {
-      "BKR": {
-        "score": 71.18,
-        "direction": "accumulation"
-      },
       "DVN": {
         "score": 73.61,
         "direction": "accumulation"
-      },
-      "EXR": {
-        "score": 72.81,
-        "direction": "distribution"
-      },
-      "LYV": {
-        "score": 77.28,
-        "direction": "distribution"
-      },
-      "TRV": {
-        "score": 82.49,
-        "direction": "distribution"
-      },
-      "VRTX": {
-        "score": 71.15,
-        "direction": "distribution"
       }
     }
   }
