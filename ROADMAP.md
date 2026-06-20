@@ -58,7 +58,7 @@ Detail/status per concept lives in `appendix.md`; definitions in `wyckoff_method
 
 | Item | Status | Detail |
 |---|---|---|
-| **Lightweight Charts annotations** | TODO | Render charts ourselves (range lines, spring/upthrust markers, score labels) using TradingView's open-source Lightweight Charts™, superseding the display-only embed widget. SPEC §12. |
+| **Lightweight Charts annotations** | DONE | Dashboard rebuilt as a single shared annotated chart + ranked candidate list, using TradingView's open-source Lightweight Charts™ fed by OHLCV embedded in the page (no view-time data fetch). Annotations: range high/low band + spring/upthrust marker. Keeps an "open in TradingView" link + attribution. Superseded the display-only embed widget. SPEC §8.1, §12. |
 | **Discord static chart PNG preview** | TODO | Glanceable image attached to the notification (the dashboard stays the inspection surface). SPEC §12. |
 
 ## Tier 5 — Future phases & architecture
@@ -77,3 +77,4 @@ here only for visibility/sequencing.
 | Climax-anchored range boundaries | TODO | Refinement over the v1 support/resistance band. SPEC §12; methodology §2.3/§3. |
 | Paid data source (Polygon) | TODO | If intraday / higher quality is ever needed. SPEC §12. |
 | IBKR optional output | TODO | For users keeping TWS running. SPEC §12. |
+| Hosted multi-tool dashboard / orchestrator | TODO (trigger-based) | Today the static gh-pages + GitHub Actions model *is* the orchestrator. Revisit a small web app + scheduler (and maybe a DB / VPS) when a **view-time backend** is needed (in-browser agent, on-demand re-scan, filtering), **intraday scheduling**, a **real DB** (signals outgrow CSV+partitioning), or **heavy/long compute** (big backtests). Pure functions + per-concern CLIs + the `Strategy` interface make this a packaging change, not a rewrite — worth a focused planning session when a trigger fires. |

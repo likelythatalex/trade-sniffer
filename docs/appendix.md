@@ -288,10 +288,12 @@ version. Think of it as a README for the *domain*, not the code.
 - **Plain meaning:** Find and inspect candidates in one place rather than exporting to
   another app.
 - **How it's implemented here:** `report.render_dashboard` renders a single-file HTML report
-  per timeframe (Jinja2 template) with **lazy-loaded** free TradingView embed widgets
-  (attribution kept), accumulation/distribution sections ranked by score; plus
-  `write_tv_import_file` (secondary `.txt`), `write_index_page` (a small `index.html` landing
-  page so the bare Pages URL resolves), and `append_signals` (schema-stable log).
+  per timeframe (Jinja2 template): a **ranked candidate list + one shared annotated chart**
+  built with TradingView's open-source **Lightweight Charts™**, fed by OHLCV embedded in the
+  page as JSON (no view-time data fetch). Annotations: range high/low band + spring/upthrust
+  marker (`scanner._chart_data`, from the Wyckoff result metadata). Keeps an "open in
+  TradingView" link + attribution. Plus `write_tv_import_file` (secondary `.txt`),
+  `write_index_page` (`index.html` landing page), and `append_signals` (schema-stable log).
 - **Status:** `IMPLEMENTED` (`report.py`, tested in `tests/test_report.py`); wired
   end-to-end by `scanner.py`. CI publishes output to the **gh-pages** branch (GitHub Pages),
   so `main` stays code-only and the dashboard is viewable at

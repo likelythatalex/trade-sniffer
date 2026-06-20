@@ -89,6 +89,7 @@ class WyckoffStrategy(Strategy):
                 "composite_signed": composite_signed,
                 "is_spring": spring["is_spring"],
                 "is_upthrust": spring["is_upthrust"],
+                "spring_bar": spring["bar"],  # timestamp of the spring/upthrust bar, for chart marker
                 "confirmation": confirmation_breakdown,  # per-input contributions, for logging
             },
         )
@@ -264,7 +265,7 @@ def detect_spring_upthrust(
     range_lookback = min(int(params["range_lookback"]), n)
     wick_threshold = float(params["spring_wick_pct"]) / 100.0
 
-    result = {"score": 0.0, "is_spring": False, "is_upthrust": False, "reasons": []}
+    result = {"score": 0.0, "is_spring": False, "is_upthrust": False, "reasons": [], "bar": None}
 
     established_end = n - spring_lookback
     established_start = n - range_lookback
@@ -288,6 +289,7 @@ def detect_spring_upthrust(
             spring_idx = established_end + min(breaks_down, key=lambda i: recent_lows[i])  # deepest poke
             quality, q_reasons = _false_break_quality(df, features, spring_idx, established_end, "spring", wick_threshold)
             result["is_spring"] = True
+            result["bar"] = df.index[spring_idx]
             result["score"] = 100.0 * _quality_to_strength(quality)
             result["reasons"] = ["spring: false break below support, recovered inside"] + q_reasons
 
@@ -299,12 +301,14 @@ def detect_spring_upthrust(
             up_idx = established_end + max(breaks_up, key=lambda i: recent_highs[i])  # highest poke
             quality, q_reasons = _false_break_quality(df, features, up_idx, established_end, "upthrust", wick_threshold)
             result["is_upthrust"] = True
+            result["bar"] = df.index[up_idx]
             result["score"] = -100.0 * _quality_to_strength(quality)
             result["reasons"] = ["upthrust: false break above resistance, rejected"] + q_reasons
 
     if result["is_spring"] and result["is_upthrust"]:  # ambiguous -> abstain
         result["score"] = 0.0
         result["reasons"] = []
+        result["bar"] = None
     return result
 
 

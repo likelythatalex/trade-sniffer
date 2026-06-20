@@ -17,6 +17,14 @@ from src import report
 
 CONFIG = config_module.load_config(Path("config.yaml"))
 
+def _chart(range_high=110.0, range_low=100.0, marker=None):
+    return {
+        "candles": [{"time": "2024-05-31", "open": 104.0, "high": 106.0, "low": 103.0, "close": 105.0}],
+        "volume": [{"time": "2024-05-31", "value": 1000.0, "up": True}],
+        "range_high": range_high, "range_low": range_low, "marker": marker,
+    }
+
+
 CARDS = [
     {
         "ticker": "XOM",
@@ -25,6 +33,7 @@ CARDS = [
         "score": 72.0,
         "sub_scores": {"volume_behavior": 80.0, "range_structure": 40.0},
         "reasons": ["spring at support"],
+        "chart": _chart(marker={"time": "2024-05-31", "type": "spring"}),
     },
     {
         "ticker": "AAPL",
@@ -33,6 +42,7 @@ CARDS = [
         "score": 55.0,
         "sub_scores": {"volume_behavior": 50.0},
         "reasons": ["no supply"],
+        "chart": _chart(),
     },
     {
         "ticker": "KO",
@@ -41,6 +51,7 @@ CARDS = [
         "score": 65.0,
         "sub_scores": {"volume_behavior": -60.0},
         "reasons": ["upthrust at resistance"],
+        "chart": _chart(),
     },
 ]
 
@@ -98,14 +109,11 @@ def test_render_dashboard_writes_files_with_required_content(tmp_path: Path) -> 
 
     html = path.read_text(encoding="utf-8")
     assert "XOM" in html and "KO" in html
-    assert "NYSE:XOM" in html  # TV symbol embedded
-    assert "embed-widget-advanced-chart.js" in html  # the TV widget
+    assert "NYSE:XOM" in html  # TV symbol embedded (for the open-in-TradingView link)
+    assert "lightweight-charts" in html  # the Lightweight Charts library
+    assert "candles" in html and "range_high" in html  # OHLCV + annotation data embedded
     assert "TradingView" in html  # attribution kept visible
     assert "Accumulation" in html and "Distribution" in html
-    # Resizable / expandable chart controls.
-    assert "autosize" in html  # widget fills its container (so resize/fullscreen work)
-    assert "class=\"expand\"" in html and "fullscreen" in html
-    assert "chart-close" in html  # visible exit control in fullscreen
 
 
 def test_render_dashboard_ranks_within_direction(tmp_path: Path) -> None:

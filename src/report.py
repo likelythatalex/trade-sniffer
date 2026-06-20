@@ -59,6 +59,8 @@ def render_dashboard(
     today = today or date.today()
     accumulation = _ranked_view(cards, "accumulation")
     distribution = _ranked_view(cards, "distribution")
+    # Per-ticker chart data + metadata, embedded as JSON for the single shared chart.
+    cards_map = {card["ticker"]: card for card in accumulation + distribution}
 
     environment = Environment(
         loader=FileSystemLoader(str(_TEMPLATE_DIR)),
@@ -69,10 +71,10 @@ def render_dashboard(
         timeframe=timeframe,
         generated_ts=today.isoformat(),
         theme=config.output.theme,
-        interval=config.output.embed_chart_interval[timeframe],
         summary=summary or {},
         accumulation=accumulation,
         distribution=distribution,
+        cards_map=cards_map,
     )
 
     output_dir = Path(config.output.dir)

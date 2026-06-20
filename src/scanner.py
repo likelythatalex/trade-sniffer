@@ -136,7 +136,7 @@ def run_timeframe(
                 counts["flagged"] += 1
                 current_qualifying[ticker] = {"score": round(composite.score, 2), "direction": composite.direction}
                 # Exchange is resolved here, lazily, only for the few tickers that flag.
-                cards.append(_card(ticker, resolve_exchange(ticker, config), composite))
+                cards.append(_card(ticker, resolve_exchange(ticker, config), composite, results.get("wyckoff"), cleaned))
 
         except Exception:  # fail soft: one bad ticker never kills the run (SPEC §10)
             counts["errored"] += 1
@@ -206,7 +206,13 @@ def _benchmark_close(timeframe: str, config: Config, today: date | None) -> pd.S
         return None
 
 
-def _card(ticker: str, exchange: str | None, composite: StrategyResult) -> dict[str, Any]:
+def _card(
+    ticker: str,
+    exchange: str | None,
+    composite: StrategyResult,
+    wyckoff: StrategyResult | None,
+    df: pd.DataFrame,
+) -> dict[str, Any]:
     return {
         "ticker": ticker,
         "exchange": exchange,
@@ -214,7 +220,61 @@ def _card(ticker: str, exchange: str | None, composite: StrategyResult) -> dict[
         "score": composite.score,
         "sub_scores": composite.sub_scores,
         "reasons": composite.reasons,
+        "chart": _chart_data(df, wyckoff),
     }
+
+
+_CHART_MAX_BARS = 250  # bars of history embedded per chart (keeps the page lean)
+
+
+def _chart_data(df: pd.DataFrame, wyckoff: StrategyResult | None, max_bars: int = _CHART_MAX_BARS) -> dict[str, Any]:
+    """OHLCV + annotations for one ticker's Lightweight Chart, embedded in the page.
+
+    Annotations (range band, spring/upthrust marker) come from the Wyckoff result's
+    metadata. This is the one strategy-specific bit of the chart; future strategies that
+    want their own overlays would surface them the same way.
+    """
+    window = df.iloc[-max_bars:]
+    candles = [
+        {
+            "time": _chart_time(ts),
+            "open": round(float(row.open), 2),
+            "high": round(float(row.high), 2),
+            "low": round(float(row.low), 2),
+            "close": round(float(row.close), 2),
+        }
+        for ts, row in window.iterrows()
+    ]
+    volume = [
+        {"time": _chart_time(ts), "value": round(float(row.volume), 0),
+         "up": bool(row.close >= row.open)}
+        for ts, row in window.iterrows()
+    ]
+
+    meta = wyckoff.metadata if wyckoff else {}
+    range_info = meta.get("range", {})
+    spring_bar = meta.get("spring_bar")
+    marker = None
+    if spring_bar is not None:
+        marker = {"time": _chart_time(spring_bar), "type": "spring" if meta.get("is_spring") else "upthrust"}
+
+    return {
+        "candles": candles,
+        "volume": volume,
+        "range_high": _maybe_round(range_info.get("range_high")),
+        "range_low": _maybe_round(range_info.get("range_low")),
+        "marker": marker,
+    }
+
+
+def _chart_time(ts: Any) -> Any:
+    """Lightweight Charts time: an ISO date for real bars; the raw value otherwise (test
+    fixtures use a plain integer index — keeps chart-data building hermetic)."""
+    return ts.strftime("%Y-%m-%d") if hasattr(ts, "strftime") else int(ts)
+
+
+def _maybe_round(value: Any) -> float | None:
+    return None if value is None else round(float(value), 2)
 
 
 def _notify(

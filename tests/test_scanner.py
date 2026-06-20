@@ -50,12 +50,22 @@ def test_signals_row_matches_schema() -> None:
 
 
 def test_card_shape() -> None:
-    result = StrategyResult(direction="accumulation", score=72.0, sub_scores={"volume_behavior": 80.0}, reasons=["spring"])
-    card = scanner._card("XOM", "NYSE", result)
-    assert card == {
-        "ticker": "XOM", "exchange": "NYSE", "direction": "accumulation",
-        "score": 72.0, "sub_scores": {"volume_behavior": 80.0}, "reasons": ["spring"],
-    }
+    composite = StrategyResult(direction="accumulation", score=72.0, sub_scores={"volume_behavior": 80.0}, reasons=["spring"])
+    wyckoff = StrategyResult(
+        direction="accumulation", score=72.0,
+        metadata={"range": {"range_high": 110.0, "range_low": 100.0}, "is_spring": True, "spring_bar": 2},
+    )
+    df = pd.DataFrame(
+        {"open": [1.0, 2.0, 3.0], "high": [2.0, 3.0, 4.0], "low": [0.5, 1.5, 2.5],
+         "close": [1.5, 2.5, 3.5], "volume": [100.0, 200.0, 300.0]}
+    )
+    card = scanner._card("XOM", "NYSE", composite, wyckoff, df)
+    assert card["ticker"] == "XOM" and card["exchange"] == "NYSE"
+    assert card["direction"] == "accumulation" and card["score"] == 72.0
+    assert card["sub_scores"] == {"volume_behavior": 80.0} and card["reasons"] == ["spring"]
+    chart = card["chart"]
+    assert len(chart["candles"]) == 3 and chart["range_high"] == 110.0
+    assert chart["marker"]["type"] == "spring"  # spring bar surfaced as a chart marker
 
 
 def _patch_fetch(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, FetchResult]) -> None:

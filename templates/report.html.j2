@@ -1,8 +1,8 @@
 {# Wyckoff Scan dashboard — single file, no build step (SPEC §8.1).
-   Accumulation (long) and Distribution (short) in separate, ranked sections; each
-   card shows score + sub-score breakdown + reason tags + a lazy-loaded TradingView
-   Advanced Chart widget (interval follows the timeframe). TradingView attribution is
-   kept visible (free-widget license). Needs network at view time for the widget only. #}
+   A ranked list of candidates (accumulation/distribution) + ONE shared annotated chart
+   rendered with TradingView's open-source Lightweight Charts™ from OHLCV embedded in the
+   page (no view-time data fetch). Annotations: range high/low band + spring/upthrust
+   marker. TradingView attribution kept visible (license). Click a row to load it. #}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,38 +10,41 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ title }} — {{ timeframe }} — {{ generated_ts }}</title>
   <style>
-    :root { color-scheme: {{ theme }}; }
+    :root { color-scheme: {{ theme }};
+            --bg: {{ '#0e1117' if theme == 'dark' else '#ffffff' }};
+            --fg: {{ '#e6e6e6' if theme == 'dark' else '#1a1a1a' }};
+            --line: #8884; }
+    * { box-sizing: border-box; }
     body { font-family: system-ui, sans-serif; margin: 0; padding: 1.5rem;
-           background: {{ '#0e1117' if theme == 'dark' else '#ffffff' }};
-           color: {{ '#e6e6e6' if theme == 'dark' else '#1a1a1a' }}; }
+           background: var(--bg); color: var(--fg); }
     header h1 { margin: 0 0 .25rem; }
     .summary { opacity: .7; font-size: .9rem; }
-    h2 { border-bottom: 1px solid #8884; padding-bottom: .3rem; margin-top: 2rem; }
-    .card { border: 1px solid #8884; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
-    .card-head { display: flex; flex-wrap: wrap; gap: .75rem; align-items: baseline; }
-    .ticker { font-size: 1.3rem; font-weight: 700; }
-    .symbol { opacity: .6; font-size: .85rem; }
-    .direction { text-transform: uppercase; font-size: .7rem; padding: .15rem .4rem;
-                 border-radius: 4px; }
-    .direction.accumulation { background: #1b5e2099; }
-    .direction.distribution { background: #7f1d1d99; }
-    .score { margin-left: auto; font-size: 1.2rem; font-weight: 700; }
-    .expand { cursor: pointer; background: #8883; color: inherit; border: 1px solid #8884;
-              border-radius: 4px; font-size: .9rem; line-height: 1; padding: .2rem .45rem; }
-    .subscores { font-size: .8rem; opacity: .8; margin: .5rem 0; }
+    .layout { display: flex; gap: 1.25rem; align-items: flex-start; margin-top: 1rem; }
+    .list { flex: 0 0 19rem; max-height: 80vh; overflow-y: auto; }
+    .panel { flex: 1 1 auto; min-width: 0; }
+    h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; opacity: .7;
+         border-bottom: 1px solid var(--line); padding-bottom: .3rem; margin: 1rem 0 .5rem; }
+    .row { display: flex; align-items: baseline; gap: .5rem; padding: .5rem .6rem;
+           border: 1px solid var(--line); border-radius: 6px; margin: .35rem 0; cursor: pointer; }
+    .row:hover { border-color: #888; }
+    .row.active { border-color: #5aa9ff; background: #5aa9ff1a; }
+    .row .tkr { font-weight: 700; }
+    .row .scr { margin-left: auto; font-weight: 700; }
+    .dir { text-transform: uppercase; font-size: .62rem; padding: .1rem .35rem; border-radius: 4px; }
+    .dir.accumulation { background: #1b5e2099; }
+    .dir.distribution { background: #7f1d1d99; }
+    .panel-head { display: flex; flex-wrap: wrap; gap: .75rem; align-items: baseline; }
+    .panel-head .tkr { font-size: 1.4rem; font-weight: 700; }
+    .panel-head .scr { font-size: 1.2rem; font-weight: 700; margin-left: auto; }
+    .subscores { font-size: .8rem; opacity: .85; margin: .4rem 0; }
     .subscores span { margin-right: .8rem; }
-    .reasons { margin: .5rem 0; padding-left: 1.1rem; font-size: .9rem; }
-    /* Drag the bottom edge to resize; the autosize widget fills the box. */
-    .chart { height: 360px; min-height: 160px; margin-top: .75rem; resize: vertical;
-             overflow: hidden; border: 1px solid #8883; border-radius: 4px; }
-    .chart.fullscreen { position: fixed; inset: 0; height: 100vh !important; width: 100vw;
-                        margin: 0; z-index: 1000; border-radius: 0; resize: none; }
-    .chart-close { display: none; }
-    .chart.fullscreen .chart-close { display: inline-block; position: fixed; top: 12px;
-        right: 16px; z-index: 1001; background: #000a; color: #fff; border: 1px solid #fff6;
-        border-radius: 6px; padding: .35rem .7rem; cursor: pointer; font-size: .9rem; }
-    footer { margin-top: 2rem; font-size: .85rem; opacity: .7; }
+    .reasons { margin: .4rem 0; padding-left: 1.1rem; font-size: .9rem; }
+    .tvlink { font-size: .8rem; }
+    #chart { height: 460px; margin-top: .5rem; border: 1px solid var(--line); border-radius: 6px; }
+    footer { margin-top: 1.5rem; font-size: .85rem; opacity: .7; }
+    .empty { opacity: .6; padding: 2rem 0; }
   </style>
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
   <header>
@@ -56,89 +59,125 @@
     {% if summary.skipped_detail %}
     <details class="summary">
       <summary>{{ summary.skipped_detail | length }} skipped — why</summary>
-      <ul>
-        {% for ticker, reason in summary.skipped_detail %}<li>{{ ticker }} — {{ reason }}</li>{% endfor %}
-      </ul>
+      <ul>{% for ticker, reason in summary.skipped_detail %}<li>{{ ticker }} — {{ reason }}</li>{% endfor %}</ul>
     </details>
     {% endif %}
   </header>
 
-  {% macro render_card(c) %}
-  <article class="card {{ c.direction }}">
-    <div class="card-head">
-      <span class="ticker">{{ c.ticker }}</span>
-      <span class="symbol">{{ c.symbol }}</span>
-      <span class="direction {{ c.direction }}">{{ c.direction }}</span>
-      <span class="score">{{ '%.0f' | format(c.score) }}/100</span>
-      <button class="expand" type="button" title="Expand / collapse chart (Esc to exit)">⤢</button>
-    </div>
-    <div class="subscores">
-      {% for name, value in c.sub_scores.items() %}<span>{{ name }}: {{ '%+.0f' | format(value) }}</span>{% endfor %}
-    </div>
-    {% if c.reasons %}<ul class="reasons">{% for r in c.reasons %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
-    <div class="chart" data-symbol="{{ c.symbol }}">
-      <button class="chart-close" type="button" title="Exit fullscreen (Esc)">✕ Close</button>
-    </div>
-  </article>
+  {% macro row(c) %}
+  <div class="row" data-ticker="{{ c.ticker }}">
+    <span class="tkr">{{ c.ticker }}</span>
+    <span class="dir {{ c.direction }}">{{ c.direction[:4] }}</span>
+    <span class="scr">{{ '%.0f' | format(c.score) }}</span>
+  </div>
   {% endmacro %}
 
-  <section>
-    <h2>Accumulation — long candidates ({{ accumulation | length }})</h2>
-    {% for c in accumulation %}{{ render_card(c) }}{% else %}<p>None flagged.</p>{% endfor %}
-  </section>
+  <div class="layout">
+    <aside class="list">
+      <h2>Accumulation — long ({{ accumulation | length }})</h2>
+      {% for c in accumulation %}{{ row(c) }}{% else %}<p class="empty">None flagged.</p>{% endfor %}
+      <h2>Distribution — short ({{ distribution | length }})</h2>
+      {% for c in distribution %}{{ row(c) }}{% else %}<p class="empty">None flagged.</p>{% endfor %}
+    </aside>
 
-  <section>
-    <h2>Distribution — short candidates ({{ distribution | length }})</h2>
-    {% for c in distribution %}{{ render_card(c) }}{% else %}<p>None flagged.</p>{% endfor %}
-  </section>
+    <main class="panel">
+      <div class="panel-head">
+        <span class="tkr" id="p-ticker">—</span>
+        <span class="dir" id="p-dir"></span>
+        <span class="scr" id="p-score"></span>
+      </div>
+      <div class="subscores" id="p-subscores"></div>
+      <ul class="reasons" id="p-reasons"></ul>
+      <a class="tvlink" id="p-tvlink" target="_blank" rel="noopener"></a>
+      <div id="chart"></div>
+      <p id="p-empty" class="empty" hidden>No candidates flagged this run.</p>
+    </main>
+  </div>
 
   <footer>
-    <p>Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a>.</p>
+    <p>Charts powered by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a>
+       Lightweight Charts™.</p>
   </footer>
 
   <script>
-    // Lazy-load TradingView Advanced Chart widgets when a card scrolls into view, so a
-    // report with many candidates stays responsive (SPEC §8.1).
-    const INTERVAL = {{ interval | tojson }};
+    const DATA = {{ cards_map | tojson }};
     const THEME = {{ theme | tojson }};
-    const observer = new IntersectionObserver((entries, obs) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        const host = entry.target;
-        obs.unobserve(host);
-        const widget = document.createElement("div");
-        widget.className = "tradingview-widget-container__widget";
-        host.appendChild(widget);
-        const script = document.createElement("script");
-        script.type = "text/javascript";
-        script.async = true;
-        script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
-        script.innerHTML = JSON.stringify({
-          symbol: host.dataset.symbol, interval: INTERVAL, theme: THEME,
-          autosize: true, style: "1", locale: "en", allow_symbol_change: false
-        });
-        host.appendChild(script);
-      }
-    }, { rootMargin: "200px" });
-    document.querySelectorAll(".chart").forEach((el) => observer.observe(el));
+    const dark = THEME === "dark";
+    const palette = {
+      bg: "rgba(0,0,0,0)", text: dark ? "#e6e6e6" : "#1a1a1a", grid: dark ? "#ffffff14" : "#0000000d",
+      up: "#26a69a", down: "#ef5350", range: dark ? "#ffd54f" : "#b8860b", marker: "#5aa9ff",
+    };
 
-    // Per-card chart: expand to fill the screen, then exit via the ✕ button or Esc.
-    document.querySelectorAll(".expand").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        btn.closest(".card").querySelector(".chart").classList.toggle("fullscreen");
+    let chart = null, candleSeries = null, volSeries = null, priceLines = [];
+
+    function ensureChart() {
+      if (chart) return;
+      const el = document.getElementById("chart");
+      chart = LightweightCharts.createChart(el, {
+        layout: { background: { color: palette.bg }, textColor: palette.text },
+        grid: { vertLines: { color: palette.grid }, horzLines: { color: palette.grid } },
+        rightPriceScale: { borderColor: palette.grid },
+        timeScale: { borderColor: palette.grid },
+        autoSize: true,
       });
-    });
-    document.querySelectorAll(".chart-close").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        btn.closest(".chart").classList.remove("fullscreen");
+      candleSeries = chart.addCandlestickSeries({
+        upColor: palette.up, downColor: palette.down,
+        wickUpColor: palette.up, wickDownColor: palette.down, borderVisible: false,
       });
-    });
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        document.querySelectorAll(".chart.fullscreen").forEach((c) => c.classList.remove("fullscreen"));
+      volSeries = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "vol" });
+      chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+    }
+
+    function render(ticker) {
+      const c = DATA[ticker];
+      if (!c) return;
+      ensureChart();
+      candleSeries.setData(c.chart.candles);
+      volSeries.setData(c.chart.volume.map((b) => ({
+        time: b.time, value: b.value, color: (b.up ? palette.up : palette.down) + "80",
+      })));
+
+      // Annotations: range band (support/resistance) + spring/upthrust marker.
+      // Clear the previous ticker's lines first — setData doesn't remove price lines.
+      priceLines.forEach((pl) => candleSeries.removePriceLine(pl));
+      priceLines = [];
+      if (c.chart.range_high != null)
+        priceLines.push(candleSeries.createPriceLine({ price: c.chart.range_high, color: palette.range, lineStyle: 2, title: "range high" }));
+      if (c.chart.range_low != null)
+        priceLines.push(candleSeries.createPriceLine({ price: c.chart.range_low, color: palette.range, lineStyle: 2, title: "range low" }));
+      if (c.chart.marker) {
+        const m = c.chart.marker;
+        candleSeries.setMarkers([{
+          time: m.time, position: m.type === "spring" ? "belowBar" : "aboveBar",
+          color: palette.marker, shape: m.type === "spring" ? "arrowUp" : "arrowDown",
+          text: m.type === "spring" ? "Spring" : "Upthrust",
+        }]);
+      } else {
+        candleSeries.setMarkers([]);
       }
-    });
+      chart.timeScale().fitContent();
+
+      // Header / details.
+      document.getElementById("p-ticker").textContent = c.ticker;
+      const dir = document.getElementById("p-dir");
+      dir.textContent = c.direction; dir.className = "dir " + c.direction;
+      document.getElementById("p-score").textContent = c.score.toFixed(0) + "/100";
+      document.getElementById("p-subscores").innerHTML =
+        Object.entries(c.sub_scores).map(([k, v]) => `<span>${k}: ${v >= 0 ? "+" : ""}${v.toFixed(0)}</span>`).join("");
+      document.getElementById("p-reasons").innerHTML = (c.reasons || []).map((r) => `<li>${r}</li>`).join("");
+      const link = document.getElementById("p-tvlink");
+      link.href = "https://www.tradingview.com/chart/?symbol=" + encodeURIComponent(c.symbol || c.ticker);
+      link.textContent = "Open " + (c.symbol || c.ticker) + " in TradingView ↗";
+
+      document.querySelectorAll(".row").forEach((r) => r.classList.toggle("active", r.dataset.ticker === ticker));
+    }
+
+    document.querySelectorAll(".row").forEach((r) => r.addEventListener("click", () => render(r.dataset.ticker)));
+
+    // Select the top candidate on load (accumulation first, then distribution).
+    const first = document.querySelector(".row");
+    if (first) { render(first.dataset.ticker); }
+    else { document.getElementById("chart").hidden = true; document.getElementById("p-empty").hidden = false; }
   </script>
 </body>
 </html>

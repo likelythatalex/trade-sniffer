@@ -486,17 +486,19 @@ Kept short on purpose:
     *why* it flagged at a glance.
   - Plain-English reason tags (e.g., "volume dry-up at support", "spring on Tue",
     "outperforming SPY", "flagged on both D + W").
-  - An **embedded interactive TradingView Advanced Chart widget** for that symbol, at the
-    interval matching this report's timeframe (§4.2 `output.embed_chart_interval`), so you
-    inspect the chart in the same place — no app-switching.
-- **Single file, no build step:** the page references TradingView's hosted embed script
-  (`embed-widget-advanced-chart.js`) via `<script>` + symbol config. **No API key.** (It is
-  one self-contained HTML file but does require network at view time for the TV widget.)
-- **Keep TradingView attribution visible** (license requirement for the free widget).
-- Top-of-page run summary: timeframe, counts (scanned / flagged / skipped / errored),
-  run timestamp.
-- Lazy-load chart widgets (only instantiate when a card scrolls into view) so a report
-  with many candidates stays responsive.
+  - An **annotated interactive chart** for the selected candidate, rendered with TradingView's
+    open-source **Lightweight Charts™** from OHLCV embedded in the page. Annotations: the
+    range high/low band and a spring/upthrust marker. (Superseded the v1 display-only embed
+    widget, per §12 — the embed couldn't take programmatic annotations.)
+- **Layout:** a ranked candidate list (accumulation/distribution) + **one shared chart** that
+  loads the clicked candidate, so you cycle through setups without N heavy charts.
+- **Single file, no build step:** OHLCV + annotations are embedded as JSON, so there's **no
+  view-time data fetch**; the page loads the Lightweight Charts library from a pinned CDN
+  script. **No API key.** An "open in TradingView ↗" link per candidate preserves access to
+  TV's full toolset for deep manual analysis.
+- **Keep TradingView attribution visible** (the open-source library's license requires it).
+- Top-of-page run summary: timeframe, counts (scanned / flagged / skipped / errored), run
+  timestamp, and a collapsible "N skipped — why" list of excluded tickers + reasons.
 
 ### 8.2 TradingView import file (secondary, near-free)
 - Also write `output/watchlist_daily.txt` / `watchlist_weekly.txt`, one exchange-prefixed

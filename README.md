@@ -50,14 +50,17 @@ python -m src.scanner --timeframe daily --threshold 30
 
 | File | What it is |
 |------|-----------|
-| `report_<tf>_<date>.html` | Dated dashboard (ranked cards + embedded charts) |
+| `report_<tf>_<date>.html` | Dated dashboard (ranked list + one annotated chart) |
 | `latest_<tf>.html` | Newest dashboard for that timeframe — open this in a browser |
+| `index.html` | Landing page linking the latest daily/weekly dashboards |
 | `watchlist_<tf>.txt` | TradingView-importable symbol list |
 | `signals.csv` | Append-only log of **every** evaluated ticker (the calibration/backtest dataset) |
 | `state.json` | Prior-run qualifiers (drives dedup + the multi-timeframe cross-read) |
 
-In the dashboard, each chart can be **drag-resized** (bottom edge) or **expanded fullscreen**
-(⤢ button; exit with the ✕ button or `Esc`).
+The dashboard shows a ranked candidate list beside **one shared annotated chart** (TradingView
+Lightweight Charts™, fed by data embedded in the page): click a candidate to load it, with the
+range band and spring/upthrust marker drawn on. Each candidate also has an "open in
+TradingView ↗" link for deep manual analysis.
 
 ## Backtesting (offline)
 
