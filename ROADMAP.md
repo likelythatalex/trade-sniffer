@@ -50,8 +50,8 @@ Detail/status per concept lives in `appendix.md`; definitions in `wyckoff_method
 
 | Item | Status | Detail |
 |---|---|---|
-| **Backtesting harness** | TODO | Replay `signals.csv` forward N bars: did high scores precede markup/markdown? **Must** use a point-in-time universe (survivorship bias, SPEC §4.1). Highest long-term value. SPEC §12. |
-| **Calibrate seed thresholds & weights** | TODO | Tune the `[TUNABLE]` params against accumulated `signals.csv`. Depends on the backtester + data accumulating first. appendix §D lists every tunable; methodology has the `[VERIFY]`/`[TUNABLE]` stubs. |
+| **Backtesting harness** | DONE (Phase 1: replay) | `src/backtest/` (own CLI, off the cron path). Re-scores history with the production pipeline as-of each bar, computes forward + excess-vs-SPY returns, and reports IC / by-bucket returns / hit-rate lift / per-sub-score IC. **Replay carries survivorship bias** (caveated in every report); MTF not replayed. Phase 2 (unbiased) = run the same `outcomes`/`metrics` over accumulated live `signals.csv` once it grows. SPEC §12. |
+| **Calibrate seed thresholds & weights** | TODO (unblocked) | Tune the `[TUNABLE]` params using the backtester's IC / sub-score-IC / bucket monotonicity. appendix §D lists every tunable; methodology has the `[VERIFY]`/`[TUNABLE]` stubs. Best done once more live data accrues (replay is biased). |
 
 ## Tier 4 — Outputs & UX
 

@@ -29,6 +29,9 @@ output/*
 data_cache/
 *.cache
 
+# --- Backtest results (offline analysis tool; not part of the published scan) ---
+backtest_results/
+
 # --- IDE / editor ---
 .vscode/
 .idea/

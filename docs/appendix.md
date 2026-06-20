@@ -211,9 +211,14 @@ version. Think of it as a README for the *domain*, not the code.
 ### Survivorship Bias
 - **Plain meaning:** Testing only on stocks that exist today overstates results (you've
   excluded everything that failed).
-- **How it's implemented here:** Live scanning uses today's universe (correct). Any future
-  backtest must use a point-in-time universe — flagged, not yet built.
-- **Status:** `FUTURE` (backtester).
+- **How it's implemented here:** Live scanning uses today's universe (correct). The
+  `src/backtest/` replay engine re-scores *today's* universe over history, so it is
+  **knowingly survivorship-biased** — every report prints the caveat, and it's positioned as
+  a calibration/iteration tool, not an unbiased verdict. The unbiased path is analysing
+  accumulated live `signals.csv` (point-in-time by construction) with the same
+  `outcomes`/`metrics` code as it grows (Phase 2).
+- **Status:** `PARTIAL` (`src/backtest/`): replay backtester built + caveated; the
+  point-in-time (live-`signals.csv`) path is the remaining piece.
 
 ### Lookahead Bias
 - **Plain meaning:** Accidentally using information not available at decision time, making

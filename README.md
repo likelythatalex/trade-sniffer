@@ -59,6 +59,23 @@ python -m src.scanner --timeframe daily --threshold 30
 In the dashboard, each chart can be **drag-resized** (bottom edge) or **expanded fullscreen**
 (⤢ button; exit with the ✕ button or `Esc`).
 
+## Backtesting (offline)
+
+An on-demand tool that asks: **does a higher conviction score predict a better forward
+outcome?** It re-scores history with the *same* production pipeline and reports the
+Information Coefficient (does the score rank outcomes?), forward returns by score bucket,
+hit-rate lift, and per-sub-score IC. It never runs on the schedule and never trades.
+
+```bash
+python -m src.backtest --timeframe daily --tickers AAPL,XOM,KO --horizons 5,10,20
+python -m src.backtest --timeframe daily --limit 50      # first 50 universe names
+```
+
+Results (markdown + raw CSV) are written to `backtest_results/` (gitignored). **Caveat:**
+the replay mode scores today's universe, so it carries *survivorship bias* — use it for
+calibration/iteration, not as an unbiased verdict (the report says so too). See
+[ROADMAP.md](ROADMAP.md) for the unbiased (live-`signals.csv`) Phase 2.
+
 ## Editing the universe
 
 [universe.txt](universe.txt) — one bare ticker per line (no exchange prefix), `#` for comments.
