@@ -13,8 +13,10 @@ from pathlib import Path
 from src import config as config_module
 from src.review import (
     AnthropicReviewer,
+    OllamaReviewer,
     Reviewer,
     build_review_prompt,
+    build_reviewer,
     load_reviews,
     make_reviewer,
     parse_verdict,
@@ -92,18 +94,64 @@ def test_reviews_cache_round_trip_and_tolerant(tmp_path: Path) -> None:
     assert load_reviews(tmp_path / "bad.json") == {}  # corrupt -> empty, no crash
 
 
-# --- make_reviewer ------------------------------------------------------------
+# --- make_reviewer / build_reviewer -------------------------------------------
 
 
-def test_make_reviewer_disabled_or_no_key_returns_none() -> None:
-    disabled = dataclasses.replace(CONFIG.review, enabled=False)
-    assert make_reviewer(disabled, "key") is None  # disabled even with a key
-    assert make_reviewer(_review_config().review, None) is None  # enabled but no key
+def test_make_reviewer_disabled_returns_none(monkeypatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "key")  # even with a key, disabled -> None
+    assert make_reviewer(dataclasses.replace(CONFIG.review, enabled=False)) is None
 
 
-def test_make_reviewer_builds_when_enabled_with_key() -> None:
-    reviewer = make_reviewer(_review_config().review, "secret-key")
-    assert reviewer is not None
+def test_make_reviewer_anthropic_needs_key(monkeypatch) -> None:
+    monkeypatch.delenv("REVIEW_PROVIDER", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert make_reviewer(_review_config().review) is None  # enabled, anthropic, no key
+
+
+def test_make_reviewer_builds_anthropic_with_key(monkeypatch) -> None:
+    monkeypatch.delenv("REVIEW_PROVIDER", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "secret")
+    assert isinstance(make_reviewer(_review_config().review), AnthropicReviewer)
+
+
+def test_build_reviewer_ollama_needs_no_key(monkeypatch) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("REVIEW_PROVIDER", raising=False)
+    rcfg = dataclasses.replace(CONFIG.review, provider="ollama")
+    assert isinstance(build_reviewer(rcfg), OllamaReviewer)  # local: no key required
+
+
+def test_review_env_overrides_flip_provider_and_model(monkeypatch) -> None:
+    # One committed (anthropic) config; env flips local runs to Ollama (the hybrid setup).
+    monkeypatch.setenv("REVIEW_PROVIDER", "ollama")
+    monkeypatch.setenv("REVIEW_MODEL", "qwen2.5:7b")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://gpu:11434")
+    reviewer = build_reviewer(CONFIG.review)  # committed provider is anthropic
+    assert isinstance(reviewer, OllamaReviewer)
+    assert reviewer._model == "qwen2.5:7b" and reviewer._base_url == "http://gpu:11434"
+
+
+def test_ollama_reviewer_calls_chat_endpoint_and_parses(monkeypatch) -> None:
+    import requests
+
+    captured: dict = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None: ...
+        def json(self) -> dict:
+            return {"message": {"content": "Verdict: aligned\nLooks fine."}}
+
+    def fake_post(url, json=None, timeout=None):  # noqa: A002 - mirrors requests.post
+        captured["url"], captured["json"] = url, json
+        return FakeResponse()
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    out = OllamaReviewer("qwen2.5:7b", "http://localhost:11434/", 200).review("evidence")
+    assert out["text"].startswith("Verdict: aligned") and out["verdict"] == "aligned"
+    assert captured["url"] == "http://localhost:11434/api/chat"  # base_url normalized + path
+    assert captured["json"]["model"] == "qwen2.5:7b"
+    assert captured["json"]["messages"][0]["role"] == "system"
+    assert captured["json"]["stream"] is False
 
 
 # --- review_candidates: the cost controls -------------------------------------

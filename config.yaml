@@ -135,9 +135,13 @@ trade_plan:
 # precomputed at scan time and baked into the dashboard. OFF by default; bounded for cost.
 review:
   enabled: true                # turn on only once ANTHROPIC_API_KEY (a GitHub Secret) is set
-  provider: anthropic           # v1: anthropic only (REST API via requests; no SDK dependency)
+  # provider: anthropic (cloud) or ollama (local GPU). Committed = anthropic so the scheduled
+  # CI review stays automated + reachable; override locally with REVIEW_PROVIDER=ollama (+
+  # REVIEW_MODEL, OLLAMA_BASE_URL) for a free, fully-private journal/scan review. SPEC §8.5.
+  provider: anthropic
   model: claude-haiku-4-5-20251001  # cheap; the review reasons over structured evidence
-  api_key_env: ANTHROPIC_API_KEY    # from env/secret, never committed
+  api_key_env: ANTHROPIC_API_KEY    # from env/secret, never committed (anthropic only)
+  base_url: http://localhost:11434  # ollama endpoint (used only when provider=ollama)
   max_tokens: 600               # a review is a short verdict + concerns list, not an essay
                                 # (400 truncated Haiku mid-bullet; 600 leaves headroom to finish)
   max_reviews_per_run: 3        # HARD cap on LLM calls per run (top-N NEW candidates by score)

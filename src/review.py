@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from abc import ABC, abstractmethod
 from datetime import date
 from pathlib import Path
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 _ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 _ANTHROPIC_VERSION = "2023-06-01"
 _VERDICTS = ("aligned", "mixed", "skeptical")
+_OLLAMA_TIMEOUT = 120  # local inference is slower than the API; give it room
 
 SYSTEM_PROMPT = (
     "You are a skeptical due-diligence reviewer for a Wyckoff accumulation/distribution "
@@ -103,14 +105,79 @@ class AnthropicReviewer(Reviewer):
         return {"text": text, "verdict": parse_verdict(text, self._verdicts)}
 
 
-def make_reviewer(config: ReviewConfig, api_key: str | None) -> Reviewer | None:
-    """Build a reviewer, or ``None`` when disabled / no key (reviewer simply skips)."""
+class OllamaReviewer(Reviewer):
+    """Calls a local Ollama server over its native REST API (no key; data stays on-machine).
+
+    Same ``Reviewer`` contract as ``AnthropicReviewer`` — the pluggable seam means local vs
+    cloud is a config choice, not a code change. A down/unreachable server raises, which the
+    callers already fail-soft (the review is simply omitted)."""
+
+    def __init__(
+        self,
+        model: str,
+        base_url: str,
+        max_tokens: int,
+        system_prompt: str = SYSTEM_PROMPT,
+        verdicts: tuple[str, ...] = _VERDICTS,
+    ) -> None:
+        self._model = model
+        self._base_url = base_url.rstrip("/")
+        self._max_tokens = max_tokens
+        self._system_prompt = system_prompt
+        self._verdicts = verdicts
+
+    def review(self, prompt: str) -> dict[str, str]:
+        import requests  # lazy: only needed when the reviewer actually runs
+
+        response = requests.post(
+            f"{self._base_url}/api/chat",
+            json={
+                "model": self._model,
+                "messages": [
+                    {"role": "system", "content": self._system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                "stream": False,
+                "options": {"num_predict": self._max_tokens, "temperature": 0.4},
+            },
+            timeout=_OLLAMA_TIMEOUT,
+        )
+        response.raise_for_status()
+        text = response.json()["message"]["content"].strip()
+        return {"text": text, "verdict": parse_verdict(text, self._verdicts)}
+
+
+def build_reviewer(
+    config: ReviewConfig,
+    system_prompt: str = SYSTEM_PROMPT,
+    verdicts: tuple[str, ...] = _VERDICTS,
+) -> Reviewer | None:
+    """Construct the configured reviewer (Anthropic or local Ollama), honoring env overrides
+    so ONE committed config can be Anthropic in CI and Ollama locally (12-factor):
+    ``REVIEW_PROVIDER`` / ``REVIEW_MODEL`` / ``OLLAMA_BASE_URL``. Returns ``None`` when it
+    can't be built (Anthropic with no key, or an unknown provider) — the caller then skips."""
+    provider = os.environ.get("REVIEW_PROVIDER", config.provider).strip().lower()
+    model = os.environ.get("REVIEW_MODEL", config.model)
+
+    if provider == "ollama":
+        base_url = os.environ.get("OLLAMA_BASE_URL") or config.base_url
+        return OllamaReviewer(model, base_url, config.max_tokens, system_prompt, verdicts)
+    if provider == "anthropic":
+        api_key = os.environ.get(config.api_key_env)
+        if not api_key:
+            logger.info("review skipped: %s not set", config.api_key_env)
+            return None
+        return AnthropicReviewer(model, api_key, config.max_tokens, system_prompt, verdicts)
+
+    logger.warning("review skipped: unknown provider %r", provider)
+    return None
+
+
+def make_reviewer(config: ReviewConfig) -> Reviewer | None:
+    """Signal-reviewer path: gated on ``enabled`` (off by default), then build by provider."""
     if not config.enabled:
         return None
-    if not api_key:
-        logger.info("review skipped: %s not set", config.api_key_env)
-        return None
-    return AnthropicReviewer(config.model, api_key, config.max_tokens)
+    return build_reviewer(config)
 
 
 # --- Orchestration (the cost controls live here) ------------------------------
@@ -131,13 +198,11 @@ def review_candidates(
     The reviewer is injected (defaults to one built from config+env) so tests stay hermetic.
     Cache key is ``timeframe:ticker`` in ``reviews_path`` (carried on gh-pages).
     """
-    import os
-
     rcfg = config.review
     cache = load_reviews(reviews_path)
 
     if reviewer is None:
-        reviewer = make_reviewer(rcfg, os.environ.get(rcfg.api_key_env))
+        reviewer = make_reviewer(rcfg)
 
     if reviewer is not None:
         to_generate = _select_for_review(cards, transitions, cache, timeframe, rcfg)

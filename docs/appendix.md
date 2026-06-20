@@ -317,12 +317,15 @@ version. Think of it as a README for the *domain*, not the code.
   due diligence, not a chat window you have to prompt.
 - **How it's implemented here:** `review.review_candidates` runs at scan time on NEWLY-flagged
   cards, builds a compact evidence prompt from the normalized card (strategy-agnostic), and a
-  pluggable `Reviewer` (`AnthropicReviewer`, REST via `requests`, no SDK dep) returns a
-  `Verdict: aligned/mixed/skeptical` + assessment + concerns. Baked into the dashboard (text
-  only, never HTML-injected). Never gives trading advice. Cost-bounded: off by default,
-  NEW-only, per-run cap, cheap model, bounded output, cached by `timeframe:ticker`
-  (`reviews.json`); fail-soft on missing key / errors.
-- **Status:** `IMPLEMENTED` (v1, bounded) (`review.py` + `scanner.py`, tested in
+  pluggable `Reviewer` returns a `Verdict: aligned/mixed/skeptical` + assessment + concerns.
+  Two providers (REST via `requests`, no SDK): **`AnthropicReviewer`** (cloud) and
+  **`OllamaReviewer`** (local GPU); `build_reviewer` selects by `review.provider` with env
+  overrides (`REVIEW_PROVIDER`/`REVIEW_MODEL`/`OLLAMA_BASE_URL`) — Anthropic in CI, optional
+  local Ollama for free + private runs. Baked into the dashboard (text only, never
+  HTML-injected). The same interface drives the **private post-trade journal reflection**
+  (`journal review`, a different rubric). Never gives trading advice. Cost-bounded: off by
+  default, NEW-only, per-run cap, cheap model, bounded output, cached; fail-soft.
+- **Status:** `IMPLEMENTED` (v1, bounded) (`review.py` + `scanner.py` + `journal.py`, tested in
   `tests/test_review.py`). `FUTURE`: tool-using (deeper) agency; multimodal review of the
   rendered chart image.
 

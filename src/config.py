@@ -141,9 +141,10 @@ class ReviewConfig:
     """Agent-reviewer settings (SPEC §8.5). Off by default; bounded for cost."""
 
     enabled: bool
-    provider: str
+    provider: str             # "anthropic" (cloud) | "ollama" (local); env REVIEW_PROVIDER overrides
     model: str
     api_key_env: str
+    base_url: str             # ollama endpoint (env OLLAMA_BASE_URL overrides); ignored by anthropic
     max_tokens: int
     max_reviews_per_run: int  # hard cap on LLM calls per run
     only_new: bool            # review only NEW transitions, not still-qualifying ones
@@ -345,6 +346,7 @@ def _build_config(raw: dict) -> Config:
             provider=str(_require(review, "provider", "review.")),
             model=str(_require(review, "model", "review.")),
             api_key_env=str(_require(review, "api_key_env", "review.")),
+            base_url=str(_require(review, "base_url", "review.")),
             max_tokens=int(_require(review, "max_tokens", "review.")),
             max_reviews_per_run=int(_require(review, "max_reviews_per_run", "review.")),
             only_new=bool(_require(review, "only_new", "review.")),
@@ -398,11 +400,11 @@ def _validate(config: Config) -> None:
             f"notify.channel must be 'discord' in v1 (got '{config.output.notify.channel}')."
         )
 
-    # v1 reviewer is Anthropic only; a key being unset is NOT an error (reviewer just
-    # skips, like notify) — only an enabled non-anthropic provider is a misconfig.
-    if config.review.enabled and config.review.provider != "anthropic":
+    # Reviewer provider must be a known one. A key being unset is NOT an error (the reviewer
+    # just skips, like notify); Ollama needs no key. (REVIEW_PROVIDER can override at runtime.)
+    if config.review.enabled and config.review.provider not in ("anthropic", "ollama"):
         raise ConfigError(
-            f"review.provider must be 'anthropic' in v1 (got '{config.review.provider}')."
+            f"review.provider must be 'anthropic' or 'ollama' (got '{config.review.provider}')."
         )
 
     # NOTE: we intentionally do NOT fail on a referenced env var being set-but-empty.

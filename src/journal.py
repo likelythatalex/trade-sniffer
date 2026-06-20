@@ -460,16 +460,18 @@ def _run_review(path: Path) -> None:
     LLM for a process-vs-outcome post-mortem (capped + cached), and print. Local-only; the
     reviews cache (`trade_reviews.json`) is gitignored. Explicit command, so it only needs the
     API key (no review.enabled gate)."""
-    import os
-
     from .config import load_config
     from .data import fetch_many
-    from .review import AnthropicReviewer
+    from .review import build_reviewer
 
     config = load_config()
-    api_key = os.environ.get(config.review.api_key_env)
-    if not api_key:
-        print(f"set {config.review.api_key_env} to enable private post-trade reviews")
+    # Build by provider (Anthropic or local Ollama) with env overrides — explicit command, so
+    # no enabled gate. Locally set REVIEW_PROVIDER=ollama for a free, fully-private review.
+    reviewer = build_reviewer(
+        config.review, system_prompt=POST_TRADE_SYSTEM_PROMPT, verdicts=POST_TRADE_VERDICTS
+    )
+    if reviewer is None:
+        print(f"no reviewer available (set {config.review.api_key_env}, or REVIEW_PROVIDER=ollama)")
         return
     entries = load_entries(path)
     if not any(e.get("status") == "closed" for e in entries):
@@ -480,11 +482,6 @@ def _run_review(path: Path) -> None:
     fetched = fetch_many(tickers, "daily", config)
     prices = {ticker: result.df for ticker, result in fetched.items()}
     paired = evaluate_entries(entries, prices)
-
-    reviewer = AnthropicReviewer(
-        config.review.model, api_key, config.review.max_tokens,
-        system_prompt=POST_TRADE_SYSTEM_PROMPT, verdicts=POST_TRADE_VERDICTS,
-    )
     cache = load_reviews(TRADE_REVIEWS_PATH)
     cache = review_closed_trades(paired, reviewer, cache, config.review.max_reviews_per_run)
     save_reviews(TRADE_REVIEWS_PATH, cache)

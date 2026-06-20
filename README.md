@@ -99,6 +99,25 @@ secret. It's **cost-bounded** for the public repo: NEW transitions only, a hard
 `reviews.json` cache (keyed `timeframe:ticker`) so continuing setups and same-day re-runs never
 re-spend. No key or a failed call simply omits the review.
 
+### Local LLM via Ollama (optional, free + private)
+
+The reviewer provider is pluggable: `anthropic` (cloud) or `ollama` (a local GPU). The committed
+config stays `anthropic` so the **scheduled CI review** is automated and reachable (a cloud runner
+can't reach a home GPU). For **local** runs you flip to Ollama with env vars — no file edits, no
+API key, and **trade data never leaves your machine** (the big win for the private `journal review`):
+
+```bash
+# one-time: pull a small instruct model (7-8B fits a 10-12GB card comfortably)
+ollama pull qwen2.5:7b
+# then point local runs at it:
+export REVIEW_PROVIDER=ollama REVIEW_MODEL=qwen2.5:7b   # OLLAMA_BASE_URL defaults to localhost:11434
+python -m src.journal review            # now runs on your GPU, fully private
+```
+
+A down/unreachable server just fail-softs (the review is omitted). Maintaining Ollama (install,
+`ollama pull`, drivers, keeping it up) is **local infrastructure — out of scope for this repo**;
+the repo only speaks HTTP to it.
+
 ## Private trade journal (local-only)
 
 The dashboard suggests a plan (entry/stop/target/size + a management playbook) for each

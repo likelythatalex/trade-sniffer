@@ -562,8 +562,12 @@ skeptical rubric* to every candidate, and emits a structured verdict. It reviews
   (`max_tokens`) and a compact prompt; reviews cached by `timeframe:ticker` in `reviews.json`
   (carried on gh-pages) so same-day re-runs and continuing setups never re-spend.
 - **Pluggable + fail-soft** (mirrors `notify.py`): the `Reviewer` interface allows another
-  provider later; no key or a failed call simply omits the review and the run continues.
-- **Provider:** v1 is Anthropic via the REST Messages API (`requests`, no SDK dependency).
+  provider; no key or a failed call simply omits the review and the run continues.
+- **Provider:** `anthropic` (REST Messages API) or `ollama` (local GPU, native `/api/chat`) —
+  both via `requests`, no SDK. `build_reviewer` selects by `review.provider`, with env overrides
+  (`REVIEW_PROVIDER` / `REVIEW_MODEL` / `OLLAMA_BASE_URL`) so one committed config is Anthropic in
+  CI and Ollama locally (the cloud runner can't reach a home GPU). Local Ollama keeps **private
+  journal trade data on-machine**. Maintaining the Ollama server is out-of-repo local infra.
 - Output: a `Verdict: aligned|mixed|skeptical` line + a short assessment + a concerns list,
   rendered as text (never HTML-injected — it's model output on a public page).
 
