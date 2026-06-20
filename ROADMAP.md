@@ -74,7 +74,7 @@ and reflect on closed ones. Design + decisions: **SPEC §8A**. Loop: `signal →
 | Step | Status | Detail |
 |---|---|---|
 | 0. Disclaimer + privacy scaffolding | DONE | README + dashboard-footer disclaimer; `.gitignore` covers the private journal so trades can never leak to the public repo/gh-pages. |
-| 1. Formalize `StrategyResult.levels` | TODO | Typed structural levels (range high/low, entry/stop/target refs); wyckoff populates them. Keeps the planner strategy-agnostic. |
+| 1. Formalize `StrategyResult.levels` | DONE | Typed `Levels` (range high/low + spring_low/upthrust_high false-break extremes) on `StrategyResult`; wyckoff populates the *facts*, the combiner propagates the direction-driving strategy's levels onto the composite, the planner derives entry/stop/target from them. Facts-in-strategy / policy-in-planner keeps the planner strategy-agnostic. |
 | 2. `trade_plan.py` (pure, public) | TODO | `TradePlan` + planner: entry (confirmation break), stop (structural + ATR/% buffer), target (measured move), sizing (account-risk %, 1%/$100k notional), management rules (BE@+1R, scale 50% @ target, trail N×ATR). All `[TUNABLE]` per timeframe. |
 | 3. Dashboard render of the plan | TODO | Plan on each card + entry/stop/target as price lines on the existing chart. Public (no personal data). |
 | 4. `journal.py` + CLI (PRIVATE) | TODO | Local-only, gitignored, never in CI. Record intended trades (`python -m src.journal add …`). |

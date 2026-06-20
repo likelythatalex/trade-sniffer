@@ -21,7 +21,7 @@ from typing import Any
 
 import pandas as pd
 
-from .base import Strategy, StrategyContext, StrategyResult
+from .base import Levels, Strategy, StrategyContext, StrategyResult
 
 # Calibration seeds (could move to config later; kept here as the first-pass defaults).
 DIRECTION_FLOOR = 10.0  # |composite| below this -> direction "none"
@@ -52,6 +52,7 @@ class WyckoffStrategy(Strategy):
                 sub_scores={name: 0.0 for name in _SUB_SCORES},
                 reasons=["no valid trading range"],
                 metadata={"range": range_info},
+                levels=Levels(range_high=range_info["range_high"], range_low=range_info["range_low"]),
             )
 
         volume_score, volume_reasons = score_volume_behavior(df, features, range_info, params)
@@ -79,6 +80,12 @@ class WyckoffStrategy(Strategy):
             direction = "none"
 
         reasons = volume_reasons + spring["reasons"] + confirmation_reasons
+        levels = Levels(
+            range_high=range_info["range_high"],
+            range_low=range_info["range_low"],
+            spring_low=spring["spring_low"],        # None unless a spring was detected
+            upthrust_high=spring["upthrust_high"],  # None unless an upthrust was detected
+        )
         return StrategyResult(
             direction=direction,
             score=abs(composite_signed),
@@ -92,6 +99,7 @@ class WyckoffStrategy(Strategy):
                 "spring_bar": spring["bar"],  # timestamp of the spring/upthrust bar, for chart marker
                 "confirmation": confirmation_breakdown,  # per-input contributions, for logging
             },
+            levels=levels,
         )
 
 
@@ -265,7 +273,10 @@ def detect_spring_upthrust(
     range_lookback = min(int(params["range_lookback"]), n)
     wick_threshold = float(params["spring_wick_pct"]) / 100.0
 
-    result = {"score": 0.0, "is_spring": False, "is_upthrust": False, "reasons": [], "bar": None}
+    result = {
+        "score": 0.0, "is_spring": False, "is_upthrust": False, "reasons": [], "bar": None,
+        "spring_low": None, "upthrust_high": None,  # the false-break extreme price (for Levels)
+    }
 
     established_end = n - spring_lookback
     established_start = n - range_lookback
@@ -290,6 +301,7 @@ def detect_spring_upthrust(
             quality, q_reasons = _false_break_quality(df, features, spring_idx, established_end, "spring", wick_threshold)
             result["is_spring"] = True
             result["bar"] = df.index[spring_idx]
+            result["spring_low"] = float(df["low"].iloc[spring_idx])  # invalidation reference
             result["score"] = 100.0 * _quality_to_strength(quality)
             result["reasons"] = ["spring: false break below support, recovered inside"] + q_reasons
 
@@ -302,6 +314,7 @@ def detect_spring_upthrust(
             quality, q_reasons = _false_break_quality(df, features, up_idx, established_end, "upthrust", wick_threshold)
             result["is_upthrust"] = True
             result["bar"] = df.index[up_idx]
+            result["upthrust_high"] = float(df["high"].iloc[up_idx])  # invalidation reference
             result["score"] = -100.0 * _quality_to_strength(quality)
             result["reasons"] = ["upthrust: false break above resistance, rejected"] + q_reasons
 
@@ -309,6 +322,8 @@ def detect_spring_upthrust(
         result["score"] = 0.0
         result["reasons"] = []
         result["bar"] = None
+        result["spring_low"] = None
+        result["upthrust_high"] = None
     return result
 
 

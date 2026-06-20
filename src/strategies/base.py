@@ -17,6 +17,31 @@ import pandas as pd
 
 
 @dataclass
+class Levels:
+    """Structural reference levels a strategy *observed*, for the trade planner (SPEC §8A.1).
+
+    These are **facts** the strategy saw on the chart — the trading-range band and any
+    false-break extreme — **not a trade plan.** The planner (`trade_plan.py`) turns these,
+    plus the result's ``direction`` and config policy (buffers, measured-move, sizing), into
+    entry/stop/target/size. Keeping facts here and policy in the planner is the
+    Single-Responsibility split that lets the planner stay strategy-agnostic: any strategy
+    that fills in a range gets trade plans with no planner changes. Each field is ``None``
+    when the strategy couldn't determine it (the planner abstains on what it's missing).
+
+    Attributes:
+        range_high: top of the trading range (resistance band).
+        range_low: bottom of the trading range (support band).
+        spring_low: deepest false-break low below support → the accumulation invalidation.
+        upthrust_high: highest false-break high above resistance → the distribution invalidation.
+    """
+
+    range_high: float | None = None
+    range_low: float | None = None
+    spring_low: float | None = None
+    upthrust_high: float | None = None
+
+
+@dataclass
 class StrategyResult:
     """Normalized output of a single strategy for one ticker/timeframe.
 
@@ -30,6 +55,8 @@ class StrategyResult:
             ``volume_behavior``, ``spring_upthrust``, ``confirmation``).
         reasons: plain-English tags for the dashboard ("volume dry-up at support").
         metadata: anything extra worth surfacing (range bounds, spring bar, ...).
+        levels: structural reference levels for the trade planner (§8A); empty when
+            there's no setup (the planner only plans flagged directions anyway).
     """
 
     direction: str
@@ -37,6 +64,7 @@ class StrategyResult:
     sub_scores: dict[str, float] = field(default_factory=dict)
     reasons: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    levels: Levels = field(default_factory=Levels)
 
 
 @dataclass

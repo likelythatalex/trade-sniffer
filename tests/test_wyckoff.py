@@ -291,6 +291,24 @@ def test_textbook_distribution_scores_distribution() -> None:
     assert result.metadata["is_upthrust"] is True
 
 
+def test_evaluate_populates_structural_levels_for_planner() -> None:
+    # SPEC §8A.1: the strategy reports the facts the planner needs. Accumulation here has a
+    # ~100-110 range with a spring poke to 96.
+    accum = WyckoffStrategy().evaluate(accumulation_df(), context_for(accumulation_df(), make_params()))
+    assert accum.levels.range_high == 110.0
+    # range_low is the lowest low in the lookback, so the spring poke IS the range low here —
+    # which is exactly why spring_low is a SEPARATE field: the planner stops off the poke,
+    # not off a range_low a poke can contaminate.
+    assert accum.levels.range_low == 96.0
+    assert accum.levels.spring_low == 96.0
+    assert accum.levels.upthrust_high is None
+
+    # Distribution mirror: an upthrust poke to 114 -> upthrust_high, no spring_low.
+    distrib = WyckoffStrategy().evaluate(distribution_df(), context_for(distribution_df(), make_params()))
+    assert distrib.levels.upthrust_high == 114.0
+    assert distrib.levels.spring_low is None
+
+
 def test_trending_chart_does_not_flag() -> None:
     result = WyckoffStrategy().evaluate(trending_df(), context_for(trending_df(), make_params()))
     assert result.direction == "none"

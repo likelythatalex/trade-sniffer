@@ -7,7 +7,7 @@ historically correlated) — keep all cross-strategy aggregation here.
 """
 from __future__ import annotations
 
-from .strategies.base import StrategyResult
+from .strategies.base import Levels, StrategyResult
 
 
 def combine(results: dict[str, StrategyResult], weights: dict[str, float]) -> StrategyResult:
@@ -36,8 +36,11 @@ def combine(results: dict[str, StrategyResult], weights: dict[str, float]) -> St
     # Direction = the strongest directional contributor (weight × conviction). For a
     # single strategy this is simply its own direction. Multi-strategy conflict
     # resolution (and correlation-awareness) is future work, and belongs here.
+    # The composite also carries that contributor's structural levels, so the trade
+    # planner (§8A) reads ``composite.levels`` without knowing which strategy produced them.
     direction = "none"
     best_strength = 0.0
+    levels = Levels()
     for name, result in results.items():
         if result.direction == "none":
             continue
@@ -45,6 +48,7 @@ def combine(results: dict[str, StrategyResult], weights: dict[str, float]) -> St
         if strength > best_strength:
             best_strength = strength
             direction = result.direction
+            levels = result.levels
 
     sub_scores = {
         f"{name}.{key}": value
@@ -59,4 +63,5 @@ def combine(results: dict[str, StrategyResult], weights: dict[str, float]) -> St
         sub_scores=sub_scores,
         reasons=reasons,
         metadata={"per_strategy": {name: r.direction for name, r in results.items()}},
+        levels=levels,
     )
