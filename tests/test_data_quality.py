@@ -35,6 +35,7 @@ def dq_config(**overrides) -> DataQualityConfig:
         min_valid_bars_pct=95.0,
         drop_zero_volume_bars=True,
         verify_split_adjustment=True,
+        real_move_volume_mult=1.5,
     )
     return dataclasses.replace(base, **overrides)
 
@@ -71,6 +72,25 @@ def test_price_spike_excludes_ticker() -> None:
     cleaned, report = clean(df, None, dq_config())
     assert report.excluded is True
     assert "spike" in (report.reason or "")
+
+
+def test_high_volume_spike_is_kept_as_real_move() -> None:
+    # Same large range as the spike test, but on heavy volume -> a real move, not a glitch.
+    df = make_ohlcv()
+    df.loc[df.index[20], "high"] = 150.0
+    df.loc[df.index[20], "volume"] = 1000.0  # ~10x the baseline of 100
+    cleaned, report = clean(df, None, dq_config())
+    assert report.excluded is False
+    assert any("heavy volume" in r for r in report.repairs)
+
+
+def test_high_volume_split_gap_is_kept_as_real_move() -> None:
+    # A real earnings/M&A gap (no split) on heavy volume must not be excluded.
+    df = make_ohlcv()
+    df.loc[df.index[20:], ["open", "high", "low", "close"]] /= 2.0  # ~50% gap
+    df.loc[df.index[20], "volume"] = 1000.0  # heavy volume on the gap bar
+    cleaned, report = clean(df, None, dq_config())
+    assert report.excluded is False
 
 
 def test_unexplained_split_gap_excludes_ticker() -> None:

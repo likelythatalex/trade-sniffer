@@ -250,7 +250,11 @@ version. Think of it as a README for the *domain*, not the code.
   step that *never invents data* and logs what it touched (`data_quality.clean`). Repairs:
   drop duplicate timestamps, null-OHLC and zero/null-volume bars; forward-fill a single
   isolated missing session. Excludes: unexplained range spike (range >> trailing ATR),
-  split-adjustment mismatch with no corporate-action basis, or too few valid bars. For daily,
+  split-adjustment mismatch with no corporate-action basis, or too few valid bars. A large
+  range/gap bar trading on **heavy volume** (≥ `real_move_volume_mult` × its trailing median)
+  is treated as a *real* move (earnings/M&A) and exempted from the spike/split exclusions —
+  glitches don't come with real volume — so a liquid name isn't dropped over its own
+  legitimate volatility. For daily,
   completeness is measured against the **NYSE trading calendar** (expected sessions computed in
   `data.py` via `pandas-market-calendars` and passed in, so this module stays pure); weekly
   falls back to completeness vs the bars received. Runs **before** normalization. Pipeline:

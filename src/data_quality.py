@@ -28,6 +28,7 @@ from .config import DataQualityConfig
 _SPIKE_ATR_WINDOW = 14
 _SPLIT_GAP_LOW = 0.6
 _SPLIT_GAP_HIGH = 1.7
+_VOLUME_MEDIAN_WINDOW = 20  # trailing window for the "real move" volume baseline
 
 _OHLC = ["open", "high", "low", "close"]
 
@@ -89,14 +90,23 @@ def clean(
             report.repairs.append(f"dropped {int(bad_volume.sum())} zero/null-volume bar(s)")
 
     # --- Exclusions (can't be mechanically repaired) -------------------------
-    spikes = _detect_range_spikes(work, config.max_bar_range_atr_mult)
+    # A large range/gap on heavy volume is a REAL move (earnings, M&A), not a glitch —
+    # glitches don't come with real volume. Exempt those bars so we don't drop a liquid
+    # name forever over its own legitimate volatility (see ROADMAP / Tier 1 #4).
+    real_move = _high_volume_bars(work, config.real_move_volume_mult)
+
+    raw_spikes = _detect_range_spikes(work, config.max_bar_range_atr_mult)
+    if (raw_spikes & real_move).any():
+        report.repairs.append(f"kept {int((raw_spikes & real_move).sum())} large move(s) on heavy volume")
+    spikes = raw_spikes & ~real_move
     if spikes.any():
         report.excluded = True
         report.reason = f"unexplained price spike at {work.index[spikes][0]} (range >> ATR)"
         return work, report
 
     if config.verify_split_adjustment:
-        mismatches = _detect_split_mismatch(work, corporate_actions)
+        raw_mismatches = _detect_split_mismatch(work, corporate_actions)
+        mismatches = raw_mismatches & ~real_move
         if mismatches.any():
             report.excluded = True
             report.reason = (
@@ -148,6 +158,15 @@ def _forward_fill_session(df: pd.DataFrame, session: pd.Timestamp) -> pd.DataFra
         index=[session],
     )
     return pd.concat([df, filled]).sort_index()
+
+
+def _high_volume_bars(df: pd.DataFrame, mult: float) -> pd.Series:
+    """Bars trading at >= ``mult`` × their *trailing* median volume — the signature of a
+    real move (earnings/M&A) rather than a data glitch. Median over prior bars (shifted),
+    so the bar itself doesn't set its own baseline; right-skewed volume → median not mean."""
+    volume = df["volume"]
+    baseline = volume.rolling(_VOLUME_MEDIAN_WINDOW, min_periods=2).median().shift(1)
+    return baseline.notna() & (baseline > 0) & (volume >= mult * baseline)
 
 
 def _detect_range_spikes(df: pd.DataFrame, max_atr_mult: float) -> pd.Series:

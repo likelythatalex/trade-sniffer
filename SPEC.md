@@ -295,7 +295,9 @@ arguments by `data.py`; it performs no I/O or network calls itself.
   passed-in corporate-action data.
 - **Exclude:** if valid bars < `min_valid_bars_pct` of expected, or a spike can't be
   explained, skip the ticker this run with a logged reason. A skipped ticker beats a
-  fabricated signal.
+  fabricated signal. **Exemption:** a large range/gap bar trading on heavy volume
+  (≥ `real_move_volume_mult` × trailing median) is a *real* move (earnings/M&A), not a
+  glitch, and is kept — glitches don't come with real volume.
 - Returns a cleaned frame + a `quality_report` (what was touched) that flows into the log.
 
 ## 5A. Feature normalization (`features.py`, pure)

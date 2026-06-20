@@ -33,6 +33,9 @@ data_quality:
   min_valid_bars_pct: 95        # if < this % of expected bars are valid, exclude ticker this run
   drop_zero_volume_bars: true
   verify_split_adjustment: true # D5: corporate-action data is supplied by data.py (see §5.2)
+  real_move_volume_mult: 1.5    # [TUNABLE] a large range/gap bar trading >= this x its trailing
+                                # median volume is a REAL move (earnings/M&A), not a data glitch,
+                                # so it isn't excluded. Glitches don't come with real volume.
 
 liquidity:
   min_avg_dollar_volume: 20000000   # $20M/day, 20-day average

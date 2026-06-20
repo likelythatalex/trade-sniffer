@@ -80,6 +80,7 @@ class DataQualityConfig:
     min_valid_bars_pct: float
     drop_zero_volume_bars: bool
     verify_split_adjustment: bool
+    real_move_volume_mult: float  # large range/gap on >= this x median volume = real move, not glitch
 
 
 @dataclass(frozen=True)
@@ -230,6 +231,7 @@ def _build_config(raw: dict) -> Config:
             min_valid_bars_pct=float(_require(quality, "min_valid_bars_pct", "data_quality.")),
             drop_zero_volume_bars=bool(_require(quality, "drop_zero_volume_bars", "data_quality.")),
             verify_split_adjustment=bool(_require(quality, "verify_split_adjustment", "data_quality.")),
+            real_move_volume_mult=float(_require(quality, "real_move_volume_mult", "data_quality.")),
         ),
         liquidity=LiquidityConfig(
             min_avg_dollar_volume=float(_require(liquidity, "min_avg_dollar_volume", "liquidity.")),
