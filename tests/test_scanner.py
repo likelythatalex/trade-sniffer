@@ -17,7 +17,7 @@ import pytest
 from src import config as config_module
 from src import scanner
 from src.data import FetchResult
-from src.strategies.base import StrategyResult
+from src.strategies.base import Levels, StrategyResult
 from tests.test_wyckoff import accumulation_df
 
 CONFIG = config_module.load_config(Path("config.yaml"))
@@ -50,7 +50,10 @@ def test_signals_row_matches_schema() -> None:
 
 
 def test_card_shape() -> None:
-    composite = StrategyResult(direction="accumulation", score=72.0, sub_scores={"volume_behavior": 80.0}, reasons=["spring"])
+    composite = StrategyResult(
+        direction="accumulation", score=72.0, sub_scores={"volume_behavior": 80.0}, reasons=["spring"],
+        levels=Levels(range_high=110.0, range_low=100.0, spring_low=96.0, atr=2.0),
+    )
     wyckoff = StrategyResult(
         direction="accumulation", score=72.0,
         metadata={"range": {"range_high": 110.0, "range_low": 100.0}, "is_spring": True, "spring_bar": 2},
@@ -59,13 +62,24 @@ def test_card_shape() -> None:
         {"open": [1.0, 2.0, 3.0], "high": [2.0, 3.0, 4.0], "low": [0.5, 1.5, 2.5],
          "close": [1.5, 2.5, 3.5], "volume": [100.0, 200.0, 300.0]}
     )
-    card = scanner._card("XOM", "NYSE", composite, wyckoff, df)
+    card = scanner._card("XOM", "NYSE", composite, wyckoff, df, CONFIG)
     assert card["ticker"] == "XOM" and card["exchange"] == "NYSE"
     assert card["direction"] == "accumulation" and card["score"] == 72.0
     assert card["sub_scores"] == {"volume_behavior": 80.0} and card["reasons"] == ["spring"]
     chart = card["chart"]
     assert len(chart["candles"]) == 3 and chart["range_high"] == 110.0
     assert chart["marker"]["type"] == "spring"  # spring bar surfaced as a chart marker
+    # Suggested trade plan derived from the composite's structural levels (display-only).
+    assert card["plan"]["entry"] == 110.0 and card["plan"]["reward_risk"] > 0
+    assert card["plan"]["management"]  # the playbook lines are present
+
+
+def test_card_plan_is_none_without_levels() -> None:
+    # No structural levels (e.g. a result that flagged without a range) -> planner abstains.
+    composite = StrategyResult(direction="accumulation", score=72.0)
+    df = pd.DataFrame({"open": [1.0], "high": [2.0], "low": [0.5], "close": [1.5], "volume": [100.0]})
+    card = scanner._card("XOM", "NYSE", composite, None, df, CONFIG)
+    assert card["plan"] is None
 
 
 def _patch_fetch(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, FetchResult]) -> None:

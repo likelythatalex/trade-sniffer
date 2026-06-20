@@ -43,8 +43,9 @@ from .report import (
     write_tv_import_file,
 )
 from .state import TimeframeState, classify_transitions, load_state, mtf_direction, save_state
-from .strategies.base import StrategyContext, StrategyResult
+from .strategies.base import Levels, StrategyContext, StrategyResult
 from .strategies.registry import get_strategy
+from .trade_plan import plan_trade
 from .universe import load_universe, passes_liquidity_gate
 
 _OTHER_TIMEFRAME = {"daily": "weekly", "weekly": "daily"}
@@ -137,7 +138,7 @@ def run_timeframe(
                 counts["flagged"] += 1
                 current_qualifying[ticker] = {"score": round(composite.score, 2), "direction": composite.direction}
                 # Exchange is resolved here, lazily, only for the few tickers that flag.
-                cards.append(_card(ticker, resolve_exchange(ticker, config), composite, results.get("wyckoff"), cleaned))
+                cards.append(_card(ticker, resolve_exchange(ticker, config), composite, results.get("wyckoff"), cleaned, config))
 
         except Exception:  # fail soft: one bad ticker never kills the run (SPEC §10)
             counts["errored"] += 1
@@ -220,6 +221,7 @@ def _card(
     composite: StrategyResult,
     wyckoff: StrategyResult | None,
     df: pd.DataFrame,
+    config: Config,
 ) -> dict[str, Any]:
     return {
         "ticker": ticker,
@@ -229,6 +231,26 @@ def _card(
         "sub_scores": composite.sub_scores,
         "reasons": composite.reasons,
         "chart": _chart_data(df, wyckoff),
+        "plan": _plan_data(composite.direction, composite.levels, config),
+    }
+
+
+def _plan_data(direction: str, levels: Levels, config: Config) -> dict[str, Any] | None:
+    """Serialize the suggested trade plan for the card (rounded for display), or ``None``
+    when the planner abstains. Display-only — these are suggested levels, never executed."""
+    plan = plan_trade(direction, levels, config.trade_plan)
+    if plan is None:
+        return None
+    return {
+        "entry": round(plan.entry, 2),
+        "stop": round(plan.stop, 2),
+        "target": round(plan.target, 2),
+        "reward_risk": round(plan.reward_risk, 2),
+        "risk_per_share": round(plan.risk_per_share, 2),
+        "size_shares": round(plan.size_shares),
+        "position_value": round(plan.position_value),
+        "risk_amount": round(plan.risk_amount, 2),
+        "management": plan.management,
     }
 
 
