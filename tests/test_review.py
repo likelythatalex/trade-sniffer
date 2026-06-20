@@ -79,7 +79,8 @@ def test_reviews_cache_round_trip_and_tolerant(tmp_path: Path) -> None:
 
 
 def test_make_reviewer_disabled_or_no_key_returns_none() -> None:
-    assert make_reviewer(CONFIG.review, "key") is None  # disabled by default
+    disabled = dataclasses.replace(CONFIG.review, enabled=False)
+    assert make_reviewer(disabled, "key") is None  # disabled even with a key
     assert make_reviewer(_review_config().review, None) is None  # enabled but no key
 
 
