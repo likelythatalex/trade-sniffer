@@ -21,6 +21,10 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
+from .trade_outcome import TradeOutcome, evaluate_outcome
+
 DEFAULT_JOURNAL_PATH = Path("journal.csv")  # repo root, gitignored (never committed/published)
 
 # Trade-centric directions (the journal is about trades, not signals). The signal terms
@@ -155,6 +159,38 @@ def list_trades(path: Path, status: str | None = None) -> list[dict[str, Any]]:
     return [e for e in entries if status is None or e.get("status") == status]
 
 
+# --- outcomes (pure; prices passed in) ----------------------------------------
+
+
+def evaluate_entries(
+    entries: list[dict[str, Any]], prices: dict[str, pd.DataFrame]
+) -> list[tuple[dict[str, Any], TradeOutcome | None]]:
+    """Pair each entry with its path-dependent outcome, given ticker→OHLC price frames.
+
+    Pure (prices injected, no I/O) so it's unit-testable. Outcomes are *derived*, never
+    stored in journal.csv — the journal stays pure user input (no schema churn). The forward
+    path is bars strictly after the trade's opened date, so the entry bar can't self-resolve.
+    A ticker with no price data, or a too-recent trade, yields ``None`` (no outcome yet).
+    """
+    results: list[tuple[dict[str, Any], TradeOutcome | None]] = []
+    for entry in entries:
+        df = prices.get(entry["ticker"])
+        outcome = None
+        if df is not None:
+            forward = _bars_after(df, entry["opened_date"])
+            outcome = evaluate_outcome(
+                entry["direction"], float(entry["entry"]), float(entry["stop"]),
+                float(entry["target"]), forward,
+            )
+        results.append((entry, outcome))
+    return results
+
+
+def _bars_after(df: pd.DataFrame, opened_date: str) -> pd.DataFrame:
+    """Forward bars strictly after ``opened_date`` (entry bar excluded)."""
+    return df[df.index > pd.Timestamp(opened_date)]
+
+
 # --- CLI (local, manual) ------------------------------------------------------
 
 
@@ -163,6 +199,17 @@ def _format_row(e: dict[str, Any]) -> str:
     if e.get("status") == "closed":
         base += f" exit {e['exit_price']} on {e['exit_date']}"
     return base
+
+
+def _format_outcome(e: dict[str, Any], outcome: TradeOutcome | None) -> str:
+    head = f"#{e['id']} {e['ticker']} {e['direction']}"
+    if outcome is None:
+        return f"{head}: no price data / too recent — no outcome yet"
+    r = "n/a" if outcome.realized_r is None else f"{outcome.realized_r:+.2f}R"
+    return (
+        f"{head}: {outcome.resolution} after {outcome.bars_held} bars · realized {r} · "
+        f"MFE {outcome.mfe_r:.2f}R · MAE {outcome.mae_r:.2f}R"
+    )
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -191,6 +238,8 @@ def main(argv: list[str] | None = None) -> None:
     p_close.add_argument("--exit-date", default=None, help="YYYY-MM-DD (default: today)")
     p_close.add_argument("--notes", default=None)
 
+    sub.add_parser("report", help="evaluate each trade's outcome vs price history (fetches data)")
+
     args = parser.parse_args(argv)
     path = Path(args.file)
 
@@ -212,8 +261,28 @@ def main(argv: list[str] | None = None) -> None:
             exit_date = date.fromisoformat(args.exit_date) if args.exit_date else None
             row = close_trade(path, args.id, exit_price=args.exit_price, exit_date=exit_date, notes=args.notes)
             print("closed", _format_row(row))
+        elif args.command == "report":
+            _run_report(path)
     except JournalError as exc:
         parser.error(str(exc))
+
+
+def _run_report(path: Path) -> None:
+    """Fetch daily price history for the journal's tickers and print each trade's outcome.
+    Daily bars are used for ALL trades (finer stop/target resolution than weekly). Local
+    import keeps add/list/close free of the config/data (yfinance) dependency."""
+    from .config import load_config
+    from .data import fetch_many
+
+    entries = load_entries(path)
+    if not entries:
+        print("(no trades)")
+        return
+    tickers = sorted({e["ticker"] for e in entries})
+    fetched = fetch_many(tickers, "daily", load_config())
+    prices = {ticker: result.df for ticker, result in fetched.items()}
+    for entry, outcome in evaluate_entries(entries, prices):
+        print(_format_outcome(entry, outcome))
 
 
 if __name__ == "__main__":

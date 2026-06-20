@@ -8,12 +8,14 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from src.journal import (
     JournalError,
     add_trade,
     close_trade,
+    evaluate_entries,
     list_trades,
     load_entries,
 )
@@ -108,6 +110,27 @@ def test_close_already_closed_raises(tmp_path: Path) -> None:
     close_trade(path, 1, exit_price=118.0)
     with pytest.raises(JournalError, match="already closed"):
         close_trade(path, 1, exit_price=119.0)
+
+
+def test_evaluate_entries_pairs_trades_with_outcomes(tmp_path: Path) -> None:
+    path = journal(tmp_path)
+    # Long XOM opened 2024-06-01, entry 110 / stop 101 / target 120.
+    _add_long(path, "XOM")
+    # Forward bars AFTER 2024-06-01: a later bar tags the target (high 121).
+    idx = pd.to_datetime(["2024-06-01", "2024-06-02", "2024-06-03"])
+    prices = {"XOM": pd.DataFrame({"high": [112, 115, 121], "low": [108, 109, 113], "close": [111, 114, 120]}, index=idx)}
+    (entry, outcome), = evaluate_entries(load_entries(path), prices)
+    assert entry["ticker"] == "XOM"
+    assert outcome is not None and outcome.resolution == "target"
+    # The 2024-06-01 entry bar is excluded (forward = strictly after opened_date).
+    assert outcome.bars_held == 2
+
+
+def test_evaluate_entries_handles_missing_prices(tmp_path: Path) -> None:
+    path = journal(tmp_path)
+    _add_long(path, "XOM")
+    (_, outcome), = evaluate_entries(load_entries(path), {})  # no price data for XOM
+    assert outcome is None
 
 
 def test_round_trip_preserves_fields(tmp_path: Path) -> None:

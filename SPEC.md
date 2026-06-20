@@ -615,9 +615,13 @@ private-journal split.
 - **Record:** `python -m src.journal add …` (or edit `journal.csv`): ticker, timeframe,
   direction, entry, stop, target, size, opened date, source signal; status open/closed, exit,
   exit date.
-- **Auto-outcome:** reuse `outcomes.py` over price history — which level hit first (stop vs
-  target), realized R, MFE/MAE. Same machinery as the backtest; the journal is the *real-trade*
-  dataset alongside `signals.csv`.
+- **Auto-outcome:** a **path-dependent** evaluator (`trade_outcome.py`, pure) walks the
+  forward price path bar-by-bar — which level hit first (stop vs target), realized R, MFE/MAE
+  — surfaced by `journal report`. This is distinct from `backtest/outcomes.py` (close-to-close
+  forward returns for the score's IC); a trade plan is path-dependent, so it's its own module,
+  **shared** with the future policy-sweep simulator (Tier 3). Outcomes are *derived* (recomputed
+  from prices), never stored in `journal.csv` — the journal stays pure user input. The journal
+  is the *real-trade* dataset alongside `signals.csv`.
 - **Post-trade agent review (private):** reuse the `Reviewer` ABC (§8.5) with a *reflection*
   system prompt — "how did this closed trade go, what worked / didn't, the lesson." Sends
   trade details to the Anthropic API from your machine (a private call, but it does leave the
