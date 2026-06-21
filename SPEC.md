@@ -492,6 +492,9 @@ Kept short on purpose:
     widget, per §12 — the embed couldn't take programmatic annotations.)
 - **Layout:** a ranked candidate list (accumulation/distribution) + **one shared chart** that
   loads the clicked candidate, so you cycle through setups without N heavy charts.
+- **Recently invalidated (collapsed):** a sidebar toggle listing setups that qualified a prior
+  run but dropped off this one (the `failed` transition), showing prior direction/score → the
+  current score it fell to (`n/a` if not re-evaluated). A review aid, not current candidates.
 - **Single file, no build step:** OHLCV + annotations are embedded as JSON, so there's **no
   view-time data fetch**; the page loads the Lightweight Charts library from a pinned CDN
   script. **No API key.** An "open in TradingView ↗" link per candidate preserves access to

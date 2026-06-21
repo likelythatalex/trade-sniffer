@@ -84,6 +84,28 @@ def test_card_plan_is_none_without_levels() -> None:
     assert card["plan"] is None
 
 
+def test_failed_setups_builds_from_transitions() -> None:
+    from src.state import TimeframeState
+
+    prior = TimeframeState(
+        qualifying={
+            "TSLA": {"score": 74.0, "direction": "accumulation"},
+            "GE": {"score": 71.0, "direction": "distribution"},
+            "KO": {"score": 80.0, "direction": "accumulation"},  # still qualifying -> not failed
+        },
+        run_ts="2024-05-31T22:00:00Z",
+    )
+    transitions = {"TSLA": "failed", "GE": "failed", "KO": "continuing", "AAPL": "new"}
+    # TSLA was re-evaluated (fell to 58); GE wasn't evaluated this run (no data) -> current None.
+    signal_rows = [{"ticker": "TSLA", "composite_score": 58.0}, {"ticker": "KO", "composite_score": 80.0}]
+
+    failed = scanner._failed_setups(transitions, prior, signal_rows)
+
+    assert [f["ticker"] for f in failed] == ["TSLA", "GE"]  # sorted by prior_score desc
+    assert failed[0] == {"ticker": "TSLA", "direction": "accumulation", "prior_score": 74.0, "current_score": 58.0}
+    assert failed[1]["current_score"] is None  # GE not evaluated this run
+
+
 def _patch_fetch(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, FetchResult]) -> None:
     """Stub the batch fetch, lazy exchange, and SPY benchmark so run_timeframe stays
     hermetic. Benchmark defaults to None (RS abstains) → existing scores unchanged."""

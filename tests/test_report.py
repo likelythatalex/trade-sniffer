@@ -160,3 +160,24 @@ def test_render_dashboard_ranks_within_direction(tmp_path: Path) -> None:
     html = report.render_dashboard(CARDS, "daily", cfg, today=date(2024, 6, 1)).read_text(encoding="utf-8")
     # XOM (72) must appear before AAPL (55) — ranked descending within accumulation.
     assert html.index("XOM") < html.index("AAPL")
+
+
+def test_render_dashboard_shows_failed_setups(tmp_path: Path) -> None:
+    cfg = config_with_output(tmp_path)
+    failed = [
+        {"ticker": "TSLA", "direction": "accumulation", "prior_score": 74.0, "current_score": 58.0},
+        {"ticker": "GE", "direction": "distribution", "prior_score": 71.0, "current_score": None},
+    ]
+    html = report.render_dashboard(
+        CARDS, "daily", cfg, today=date(2024, 6, 1), failed=failed
+    ).read_text(encoding="utf-8")
+
+    assert "Recently invalidated (2)" in html
+    assert "TSLA" in html and "74 → 58" in html  # prior -> current drop shown
+    assert "GE" in html and "71 → n/a" in html   # not evaluated this run -> n/a
+
+
+def test_render_dashboard_omits_failed_section_when_none(tmp_path: Path) -> None:
+    cfg = config_with_output(tmp_path)
+    html = report.render_dashboard(CARDS, "daily", cfg, today=date(2024, 6, 1)).read_text(encoding="utf-8")
+    assert "Recently invalidated" not in html

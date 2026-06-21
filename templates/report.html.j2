@@ -69,6 +69,13 @@
     .market.regime-risk-off { background: rgba(239,83,80,.15); }
     .market.regime-neutral, .market.regime-unknown { background: rgba(128,128,128,.15); }
     .market-note { opacity: .6; font-size: .8rem; }
+    /* Recently-invalidated setups: collapsed by default (a review aid, not current candidates). */
+    .failed-setups { margin-top: 1.25rem; }
+    .failed-setups summary { cursor: pointer; font-size: .8rem; text-transform: uppercase;
+      letter-spacing: .05em; opacity: .7; }
+    .failed-note { font-size: .72rem; opacity: .55; margin: .4rem 0 .2rem; }
+    .failed-row { display: flex; align-items: baseline; gap: .5rem; padding: .3rem .6rem; opacity: .7; }
+    .failed-row .failed-scr { margin-left: auto; font-variant-numeric: tabular-nums; }
     /* Mobile: stack the layout and HIDE the chart (keep list/scores/reasons/plan/review).
        Charting on a phone is covered by the "open in TradingView" link. */
     @media (max-width: 760px) {
@@ -120,6 +127,21 @@
       {% for c in accumulation %}{{ row(c) }}{% else %}<p class="empty">None flagged.</p>{% endfor %}
       <h2>Distribution — short ({{ distribution | length }})</h2>
       {% for c in distribution %}{{ row(c) }}{% else %}<p class="empty">None flagged.</p>{% endfor %}
+
+      {% if failed %}
+      <details class="failed-setups">
+        <summary>Recently invalidated ({{ failed | length }})</summary>
+        <p class="failed-note">Qualified a prior run, dropped below threshold this run — shown for review, not current candidates.</p>
+        {% for f in failed %}
+        <div class="failed-row">
+          <span class="tkr">{{ f.ticker }}</span>
+          <span class="dir {{ f.direction }}">{{ f.direction[:4] }}</span>
+          <span class="failed-scr">{{ '%.0f' | format(f.prior_score) }} →
+            {%- if f.current_score is not none %} {{ '%.0f' | format(f.current_score) }}{% else %} n/a{% endif %}</span>
+        </div>
+        {% endfor %}
+      </details>
+      {% endif %}
     </aside>
 
     <main class="panel">

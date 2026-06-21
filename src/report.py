@@ -67,11 +67,16 @@ def render_dashboard(
     today: date | None = None,
     summary: dict[str, Any] | None = None,
     market: dict[str, Any] | None = None,
+    failed: list[dict[str, Any]] | None = None,
 ) -> Path:
     """Render ``report_<tf>_<date>.html`` + refresh ``latest_<tf>.html``. Returns the path.
 
     Cards are split into accumulation/distribution and ranked by score (descending)
     within each. Each card gets a TV symbol for its embedded chart.
+
+    ``failed`` is the list of setups that qualified a prior run but dropped off this one
+    (the scanner's ``failed`` transitions) — surfaced behind a collapsed toggle so an
+    invalidation is visible, not silent. These are informational, not current candidates.
     """
     today = today or date.today()
     accumulation = _ranked_view(cards, "accumulation")
@@ -93,6 +98,7 @@ def render_dashboard(
         accumulation=accumulation,
         distribution=distribution,
         cards_map=cards_map,
+        failed=failed or [],
     )
 
     output_dir = Path(config.output.dir)

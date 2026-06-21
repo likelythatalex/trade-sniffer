@@ -176,6 +176,12 @@ def run_timeframe(
     for row in signal_rows:
         row["transition"] = transitions.get(row["ticker"], "none")
 
+    # Recently-invalidated setups (transition == "failed"): qualified last run, dropped off
+    # this one. The prior score/direction come from saved state; the current score (how far it
+    # fell) from this run's signal log — None if the ticker wasn't evaluated this run (no data /
+    # skipped). Surfaced behind a dashboard toggle so an invalidation is visible, not silent.
+    failed = _failed_setups(transitions, prior_tf_state, signal_rows)
+
     # Objective due-diligence review of NEWLY-flagged setups (bounded/cached/off by default),
     # attached to the cards before rendering so it shows on the dashboard.
     review_candidates(
@@ -191,7 +197,7 @@ def run_timeframe(
     append_market({"run_ts": run_ts, "timeframe": timeframe, **market}, Path(config.output.dir) / "market.csv")
 
     summary = {**counts, "skipped_detail": skipped_detail, "errored_detail": errored_detail}
-    render_dashboard(cards, timeframe, config, today=today, summary=summary, market=market)
+    render_dashboard(cards, timeframe, config, today=today, summary=summary, market=market, failed=failed)
     write_index_page(config)  # gh-pages landing page so the bare Pages URL isn't a 404
     if config.output.write_tv_import_file:
         write_tv_import_file(cards, timeframe, config)
@@ -270,6 +276,33 @@ def _fetch_insider(
     except Exception:
         logger.warning("insider fetch failed; insider strategy abstains this run")
         return {}
+
+
+def _failed_setups(
+    transitions: dict[str, str],
+    prior_tf_state: TimeframeState | None,
+    signal_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build the dashboard's "recently invalidated" list from this run's ``failed`` transitions.
+
+    A failed transition means the ticker is in the prior qualifiers but not the current ones,
+    so ``prior_tf_state`` is guaranteed non-None here (cold start has no prior qualifiers, hence
+    no failures). Sorted by prior score so the most notable drop-offs lead.
+    """
+    prior_qualifiers = prior_tf_state.qualifying if prior_tf_state else {}
+    current_scores = {row["ticker"]: row["composite_score"] for row in signal_rows}
+    failed = [
+        {
+            "ticker": ticker,
+            "direction": prior_qualifiers[ticker]["direction"],
+            "prior_score": prior_qualifiers[ticker]["score"],
+            "current_score": current_scores.get(ticker),  # None if not evaluated this run
+        }
+        for ticker, transition in transitions.items()
+        if transition == "failed"
+    ]
+    failed.sort(key=lambda setup: setup["prior_score"], reverse=True)
+    return failed
 
 
 def _card(
