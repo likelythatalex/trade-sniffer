@@ -22,6 +22,11 @@ CHANGE-MARK (refinement pass, aligned to SPEC §6.1/§6.4):
   • New "Law of Cause & Effect (target projection)" entry: FUTURE (targets are range/ATR-based,
     not a P&F cause count).
   • "Embedded Charts / Dashboard" entry: Creek/ICE + Spring/UTAD + SC/BC markers + legend.
+
+  News-sentiment strategy pass (3rd strategy, logged-but-inert):
+  • New "News Sentiment (strategy)" entry; Confirmation Stacking + Correlation Awareness
+    updated to three strategies; §D table gains momentum/sentiment params. signals.csv → v4
+    (news_sentiment_score). Forward-only (not backtestable). SPEC §6/§12.
 -->
 
 A living reference for the trading/market concepts this project uses, what they mean in
@@ -222,21 +227,43 @@ version. Think of it as a README for the *domain*, not the code.
 - **Plain meaning:** Rather than a yes/no call, rank candidates 0–100; independent signals
   agreeing should raise the score.
 - **How it's implemented here:** Per-strategy `StrategyResult` scores combined in
-  `combiner.combine` (weighted average; direction from the strongest contributor). A **second
-  strategy now exists** — `strategies/momentum.py` (trend regime + ROC), deliberately
-  independent of Wyckoff. It ships at **weight 0**: computed and logged (`momentum_score` in
-  `signals.csv`) but contributing nothing to the composite until its weight is calibrated from
+  `combiner.combine` (weighted average; direction from the strongest contributor). **Three
+  strategies now exist** — Wyckoff, `strategies/momentum.py` (trend regime + ROC), and
+  `strategies/news_sentiment.py` (headline polarity, a non-price signal). Both additions ship
+  at **weight 0**: computed and logged (`momentum_score`, `news_sentiment_score` in
+  `signals.csv`) but contributing nothing to the composite until weights are calibrated from
   accrued data. So the rails for stacking are live; the *weighted* stacking awaits calibration.
-- **Status:** `PARTIAL` (`combiner.py` + `strategies/momentum.py`, tested): aggregation +
-  second strategy done; weighting it (and correlation-awareness) still `FUTURE` (data-gated).
+- **Status:** `PARTIAL` (`combiner.py` + `strategies/{momentum,news_sentiment}.py`, tested):
+  aggregation + two extra strategies done; weighting (and correlation-awareness) still
+  `FUTURE` (data-gated).
 
 ### Signal Correlation Awareness
 - **Plain meaning:** Stacked signals only add information if they're *independent*; three
   trend-flavored signals agreeing is one signal counted thrice.
 - **How it's implemented here:** Not yet, but the **data is now being captured**: `momentum_score`
-  is logged alongside `wyckoff_score`/`composite_score` every run, so pairwise correlation can be
-  measured later. Designated home for the down-weighting logic is `combiner.py`.
+  and `news_sentiment_score` are logged alongside `wyckoff_score`/`composite_score` every run, so
+  pairwise correlation can be measured later. News sentiment is the most *independent* of the three
+  (non-price), so it's the strongest stacking candidate if the data bears out. Designated home for
+  the down-weighting logic is `combiner.py`.
 - **Status:** `FUTURE` (now data-gated, not blocked on plumbing).
+
+### News Sentiment (strategy)
+- **Plain meaning:** Gauge whether recent *headlines* about a stock lean bullish or bearish —
+  an information source independent of price action.
+- **How it's implemented here:** Three pieces behind the §6 `Strategy` seam: `sentiment_data.py`
+  (a swappable `NewsSource`; v1 `YFinanceNewsSource`, **day-cached + fail-soft**), `sentiment.py`
+  (a pluggable `SentimentScorer`; v1 `VaderScorer`, a deterministic lexicon — **social-tuned, not
+  finance-tuned**, a coverage/pipeline probe), and `strategies/news_sentiment.py` (applies the
+  **as-of / no-lookahead** cutoff over `lookback_days`, aggregates to a signed score). Headlines
+  are fetched **whole-universe** upstream and injected via `StrategyContext.headlines` (strategy
+  stays pure). Logged as `news_sentiment_score` at **weight 0**; `""` = abstained (no data),
+  `0.0` = neutral (the distinction matters for calibration). Named `news_sentiment` to reserve
+  `social_sentiment` for a future, separate crowd-sentiment strategy.
+- **Forward-only:** free historical news doesn't exist and replay can't reconstruct it, so this
+  signal is **not backtestable** — the live `signals.csv` is the only dataset that can validate it.
+- **Status:** `PARTIAL` (logged-but-inert): pipeline + VADER scorer shipped + tested
+  (`tests/test_sentiment.py`); LLM-via-Ollama / FinBERT scorers, richer sources, a per-stock
+  relative baseline, and weight calibration are `FUTURE`. SPEC §6/§12; ROADMAP.
 
 ### Survivorship Bias
 - **Plain meaning:** Testing only on stocks that exist today overstates results (you've
@@ -378,6 +405,10 @@ guessed once and forgotten. Listed here so they're not scattered. All currently 
 | range validity (`range_max_width_pct`, `min_range_bars`) | config (per-TF) | What counts as a valid trading range |
 | sub-score weights | config | How signals combine into the Wyckoff score |
 | intra-sub-score signal weights | code (seed) / future config | Relative weight of signals within a sub-score (start equal; calibrate) |
+| momentum `ma_window`, `roc_window` | config (per-TF) | Trend-regime MA + rate-of-change lookbacks (momentum strategy) |
+| sentiment `lookback_days`, `source`, `scorer` | config (per-TF) | News window as-of the bar + which NewsSource/SentimentScorer (news-sentiment strategy) |
+| `SENTIMENT_FULL_SCALE` | code (seed) | Mean headline compound that maps to ±100 (sentiment.py) |
+| strategy weights | config | How strategies combine into the composite (momentum/news_sentiment seed = 0) |
 | `watchlist_threshold` | config | Score cutoff for making the report |
 
 ---

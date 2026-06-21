@@ -42,6 +42,7 @@ from .report import (
     write_index_page,
     write_tv_import_file,
 )
+from .sentiment_data import build_news_source
 from .state import TimeframeState, classify_transitions, load_state, mtf_direction, save_state
 from .strategies.base import Levels, StrategyContext, StrategyResult
 from .strategies.registry import get_strategy
@@ -97,6 +98,8 @@ def run_timeframe(
     # a ticker that returned no data is simply absent and gets skipped below.
     fetched_all = fetch_many(universe, timeframe, config, today=today)
     benchmark = _benchmark_close(timeframe, config, today)  # SPY for RS; None -> RS abstains
+    # Whole-universe headlines for news-sentiment (only when that strategy is enabled).
+    headlines_all = _fetch_headlines(universe, config, today) if "news_sentiment" in strategies else {}
 
     for ticker in universe:
         counts["scanned"] += 1
@@ -129,7 +132,8 @@ def run_timeframe(
                     cleaned,
                     StrategyContext(
                         features=features, params=strategy_params[name], timeframe=timeframe,
-                        prior_state=other_direction, benchmark_close=benchmark, config=config,
+                        prior_state=other_direction, benchmark_close=benchmark,
+                        headlines=headlines_all.get(ticker), config=config,
                     ),
                 )
                 for name, strat in strategies.items()
@@ -140,7 +144,8 @@ def run_timeframe(
             signal_rows.append(
                 _signals_row(run_ts, ticker, timeframe, composite, results.get("wyckoff"),
                              features, cleaned, quality, made_watchlist, other_direction,
-                             momentum=results.get("momentum"))
+                             momentum=results.get("momentum"),
+                             news_sentiment=results.get("news_sentiment"))
             )
             if made_watchlist and composite.direction != "none":
                 counts["flagged"] += 1
@@ -221,6 +226,22 @@ def _benchmark_close(timeframe: str, config: Config, today: date | None) -> pd.S
     except Exception:
         logger.warning("benchmark (SPY) fetch failed; RS-vs-SPY abstains this run")
         return None
+
+
+def _fetch_headlines(
+    universe: list[str], config: Config, today: date | None
+) -> dict[str, list[tuple[Any, str]]]:
+    """Recent headlines per ticker for the news-sentiment strategy, fetched once per run
+    (day-cached, so the other timeframe's run reuses it). Whole-universe by design — the
+    forward calibration study needs every evaluated name, not just flagged ones (else
+    selection bias). A failure anywhere → ``{}`` so the strategy simply abstains; news must
+    never abort a scan (SPEC §10)."""
+    try:
+        source = build_news_source(config.sentiment.defaults["source"], Path(config.data.cache_dir))
+        return source.fetch(universe, today or date.today())
+    except Exception:
+        logger.warning("news fetch failed; news-sentiment abstains this run")
+        return {}
 
 
 def _card(
@@ -374,6 +395,7 @@ def _signals_row(
     made_watchlist: bool,
     mtf_direction: str | None = None,
     momentum: StrategyResult | None = None,
+    news_sentiment: StrategyResult | None = None,
 ) -> dict[str, Any]:
     """Build one signals.csv row (schema ``SIGNALS_COLUMNS``) for an evaluated ticker.
 
@@ -394,6 +416,8 @@ def _signals_row(
         "wyckoff_score": round(wyckoff.score, 2) if wyckoff else "",
         # Signed momentum composite (independent signal; logged for the correlation study).
         "momentum_score": _round(momentum.metadata.get("signed")) if momentum else "",
+        # Signed news-sentiment composite; "" = no data (abstained), 0.0 = neutral. Forward-only.
+        "news_sentiment_score": _round(news_sentiment.metadata.get("signed")) if news_sentiment else "",
         "range_score": _round(sub.get("range_structure")),
         "volume_score": _round(sub.get("volume_behavior")),
         "spring_score": _round(sub.get("spring_upthrust")),

@@ -7,6 +7,7 @@ PyYAML==6.0.3           # config.yaml
 Jinja2==3.1.6           # HTML dashboard template
 requests==2.34.2        # Discord webhook
 pandas-market-calendars==5.4.0  # NYSE trading calendar for missing-bar detection
+vaderSentiment==3.3.2   # news-sentiment strategy (deterministic lexicon scorer; pluggable)
 
 # Dev / test
 pytest==9.1.0

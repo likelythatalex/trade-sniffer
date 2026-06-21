@@ -87,6 +87,9 @@ class StrategyContext:
             multi-timeframe cross-read (§7.3). ``None`` on cold start → neutral.
         benchmark_close: the benchmark's (SPY) close series for the relative-strength
             confirmation input (§7.1), aligned by date. ``None`` → RS abstains.
+        headlines: recent ``(published_utc, title)`` news items for this ticker, fetched
+            upstream (kept out of the pure strategy). ``None`` → the news-sentiment
+            strategy abstains. Strategies apply their own as-of (no-lookahead) cutoff.
         config: the full loaded config, for anything else a strategy needs.
     """
 
@@ -95,6 +98,7 @@ class StrategyContext:
     timeframe: str
     prior_state: Any | None = None
     benchmark_close: pd.Series | None = None
+    headlines: list[tuple[Any, str]] | None = None
     config: Any | None = None
 
 

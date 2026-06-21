@@ -111,6 +111,17 @@ class MomentumConfig:
 
 
 @dataclass(frozen=True)
+class SentimentConfig:
+    """News-sentiment strategy params (SPEC §6, §12) — same defaults+per_timeframe shape.
+
+    Holds ``source`` (which `NewsSource` to use), ``scorer`` (which `SentimentScorer`), and
+    ``lookback_days`` (how far back of headlines to aggregate as-of the bar)."""
+
+    defaults: dict[str, Any]
+    per_timeframe: dict[str, dict[str, Any]]
+
+
+@dataclass(frozen=True)
 class ScoringConfig:
     watchlist_threshold: float
 
@@ -181,6 +192,7 @@ class Config:
     strategies: dict[str, StrategySpec]
     wyckoff: WyckoffConfig
     momentum: MomentumConfig
+    sentiment: SentimentConfig
     scoring: ScoringConfig
     trade_plan: TradePlanConfig
     review: ReviewConfig
@@ -233,6 +245,8 @@ def resolve_strategy_params(config: Config, name: str, timeframe: str) -> dict[s
         return resolve_wyckoff_params(config, timeframe)
     if name == "momentum":
         return _merge_timeframe(config.momentum.defaults, config.momentum.per_timeframe, timeframe)
+    if name == "news_sentiment":
+        return _merge_timeframe(config.sentiment.defaults, config.sentiment.per_timeframe, timeframe)
     raise ConfigError(f"No params resolver for strategy '{name}'.")
 
 
@@ -270,6 +284,7 @@ def _build_config(raw: dict) -> Config:
     strategies = _require(raw, "strategies", "")
     wyckoff = _require(raw, "wyckoff", "")
     momentum = _require(raw, "momentum", "")
+    sentiment = _require(raw, "sentiment", "")
     scoring = _require(raw, "scoring", "")
     trade_plan = _require(raw, "trade_plan", "")
     review = _require(raw, "review", "")
@@ -325,6 +340,13 @@ def _build_config(raw: dict) -> Config:
             per_timeframe={
                 tf: dict(overrides or {})
                 for tf, overrides in _require(momentum, "per_timeframe", "momentum.").items()
+            },
+        ),
+        sentiment=SentimentConfig(
+            defaults=dict(_require(sentiment, "defaults", "sentiment.")),
+            per_timeframe={
+                tf: dict(overrides or {})
+                for tf, overrides in _require(sentiment, "per_timeframe", "sentiment.").items()
             },
         ),
         scoring=ScoringConfig(
@@ -393,6 +415,11 @@ def _validate(config: Config) -> None:
     for name in ("ma_window", "roc_window"):
         if int(config.momentum.defaults.get(name, 0)) <= 0:
             raise ConfigError(f"momentum.defaults.{name} must be a positive integer.")
+
+    # News sentiment needs a positive look-back window; source/scorer are validated lazily
+    # (build_news_source / get_scorer fail loud on an unknown name).
+    if int(config.sentiment.defaults.get("lookback_days", 0)) <= 0:
+        raise ConfigError("sentiment.defaults.lookback_days must be a positive integer.")
 
     # v1 ships Discord only.
     if config.output.notify.channel != "discord":

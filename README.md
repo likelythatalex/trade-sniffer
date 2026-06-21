@@ -158,6 +158,17 @@ All thresholds, weights, lookbacks, and enabled strategies live in [config.yaml]
 `per_timeframe`). The numeric thresholds are **calibration seeds**, tuned later against
 `signals.csv` — not final truths.
 
+### Strategies
+
+Wyckoff is the only weighted strategy. Two more run **at weight 0 — logged but inert**: they
+compute a score every run (captured in `signals.csv` for the future correlation/calibration
+study) but contribute nothing to the composite until calibrated from accrued data. They are
+**momentum** (trend regime + rate-of-change) and **news sentiment** (recent headline polarity
+via yfinance + a VADER lexicon — an independent, non-price signal; whole-universe, no-lookahead,
+day-cached, fail-soft). News sentiment is **forward-only**: free historical news doesn't exist,
+so it can't be backtested — it must accrue live. Adding a strategy is "a file in
+`src/strategies/` + a `config.yaml` block".
+
 ## Scheduling (GitHub Actions)
 
 `.github/workflows/scan.yml` runs daily (after US close) and weekly (Saturday). It restores

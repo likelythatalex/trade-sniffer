@@ -525,10 +525,10 @@ holds the prior run's qualifying set per timeframe):
   (`notify.suppress_empty`, default true).
 
 ### 8.4 Signal log (`output/signals.csv`)
-- Append every evaluated ticker (even sub-threshold) per run. Schema (v3):
+- Append every evaluated ticker (even sub-threshold) per run. Schema (v4):
   `run_ts, ticker, timeframe, direction, composite_score, wyckoff_score, momentum_score,
-  range_score, volume_score, spring_score, confirmation_score, rs_vs_spy, vol_contraction,
-  mtf_agree, trend_context, data_quality_flag, close, volume, feat_volume_ratio,
+  news_sentiment_score, range_score, volume_score, spring_score, confirmation_score, rs_vs_spy,
+  vol_contraction, mtf_agree, trend_context, data_quality_flag, close, volume, feat_volume_ratio,
   feat_volume_pctile, feat_spread_atr, feat_spread_pctile, feat_close_position, made_watchlist,
   transition` where `transition` ∈ {`new`, `continuing`, `failed`, none}. ("Invalidated" maps
   to `failed`; "still-qualifying" maps to `continuing`.) `mtf_agree` is empty/`n/a` on cold start.
@@ -539,6 +539,11 @@ holds the prior run's qualifying set per timeframe):
   can't reconstruct price. Adding columns is a schema change — `report.append_signals()`
   migrates an older-schema file in place (rewrites under the current header, new columns
   back-filled blank), so the log is never broken (per the CLAUDE.md definition-of-done).
+- **v4:** `news_sentiment_score` — the news-sentiment strategy's signed composite (weight 0,
+  logged-but-inert). `""` = abstained (no headlines in the as-of window), `0.0` = neutral
+  (headlines, no lean) — that distinction must be preserved for the calibration study.
+  Sentiment is **forward-only** (not replay-backtestable: free historical news doesn't exist),
+  so this column accruing live is the *only* dataset that can validate the signal.
 - Per-strategy columns are namespaced so adding strategies extends (not breaks) the schema;
   `composite_score` is the combiner output, `wyckoff_score` the strategy's own; `feat_*`
   columns are strategy-agnostic (produced by `features.py`).
@@ -712,6 +717,14 @@ can be wrong, do your own research.
 
 - **Additional strategies** (momentum regime, relative strength, volatility) implementing
   the §6 `Strategy` interface — each a new file in `strategies/` + a config line.
+  - **News sentiment** (`strategies/news_sentiment.py`, weight 0) — an INDEPENDENT non-price
+    signal: headlines fetched upstream (`sentiment_data.py`, a swappable `NewsSource`; v1 =
+    yfinance, day-cached, fail-soft) and scored by a pluggable `SentimentScorer`
+    (`sentiment.py`; v1 = VADER lexicon, with Ollama-LLM / FinBERT as future engines). The
+    strategy applies the as-of (no-lookahead) cutoff and emits a signed score. Whole-universe
+    (every evaluated ticker, to avoid selection bias in calibration) and **forward-only**
+    (not replay-backtestable). A future `social_sentiment` strategy (Reddit/StockTwits) would
+    be a *separate*, independent signal stacked alongside it.
 - **Telegram notification channel** behind the §8.3 `notify.py` interface (adds
   bot-token/chat-id config; v1 is Discord-only).
 - **Confirmation stacking**: combiner raises conviction when independent strategies agree.

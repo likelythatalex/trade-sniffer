@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from .base import Strategy
 from .momentum import MomentumStrategy
+from .news_sentiment import NewsSentimentStrategy
 from .wyckoff import WyckoffStrategy
 
 # name -> class. The key must match a key under ``strategies:`` in config.yaml.
 _REGISTRY: dict[str, type[Strategy]] = {
     "wyckoff": WyckoffStrategy,
     "momentum": MomentumStrategy,
+    "news_sentiment": NewsSentimentStrategy,
 }
 
 

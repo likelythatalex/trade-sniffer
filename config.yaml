@@ -52,6 +52,11 @@ strategies:
     weight: 0.0             # LOGGED BUT INERT: computed + logged every run (accrues
                             # independence/correlation data) but contributes nothing to the
                             # composite/qualification until calibration sets a weight. SPEC §6.
+  news_sentiment:
+    enabled: true
+    weight: 0.0             # LOGGED BUT INERT (like momentum). Independent non-price signal;
+                            # forward-only (not backtestable), so it must accrue live before
+                            # calibration can weight it. SPEC §6/§12.
 
 # D6: Wyckoff parameters. `defaults` apply to every timeframe; `per_timeframe`
 # overrides are REQUIRED for weekly so a 60-*week* range isn't silently applied.
@@ -109,6 +114,20 @@ momentum:
     weekly:
       ma_window: 30             # ~30 weeks, not 50
       roc_window: 12
+
+# §6/§12 News-sentiment strategy — an INDEPENDENT, non-price signal (reads headlines, not
+# price). Pluggable by design: `source` picks the NewsSource, `scorer` the SentimentScorer.
+# v1 = yfinance headlines + VADER (a social-tuned lexicon, crude on finance text — a
+# pipeline/coverage probe, not a trusted signal). Forward-only: not backtestable. [TUNABLE].
+sentiment:
+  defaults:
+    source: yfinance            # NewsSource: yfinance (free, shallow) — swap-ready for richer feeds
+    scorer: vader               # SentimentScorer: vader (deterministic lexicon); ollama/finbert later
+    lookback_days: 7            # aggregate headlines within this many days as-of the bar close
+  per_timeframe:
+    daily: {}                   # uses defaults
+    weekly:
+      lookback_days: 30         # a weekly bar spans more time, so look back further
 
 scoring:
   watchlist_threshold: 70       # 0-100 final composite; >= this gets written out
