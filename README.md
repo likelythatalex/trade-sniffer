@@ -6,9 +6,10 @@ into a single-file **HTML dashboard with embedded TradingView charts**, a Tradin
 watchlist is written, and a link is pushed to **Discord**. It **finds and flags candidates for
 human review — it never places trades.**
 
-Design details live in [SPEC.md](SPEC.md); working agreements in [CLAUDE.md](CLAUDE.md); domain
-concepts + implementation status in [docs/appendix.md](docs/appendix.md); what's next + the
-prioritized backlog in [ROADMAP.md](ROADMAP.md).
+Design details live in [SPEC.md](SPEC.md); working agreements in [CLAUDE.md](CLAUDE.md); the
+strategy seam + shared conventions in [docs/strategies.md](docs/strategies.md); domain concepts
++ implementation status in [docs/appendix.md](docs/appendix.md); what's next + the prioritized
+backlog in [ROADMAP.md](ROADMAP.md).
 
 ## ⚠️ Disclaimer
 

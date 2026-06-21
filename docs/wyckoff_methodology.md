@@ -73,6 +73,33 @@ errors. See [appendix.md](appendix.md) for implementation status.
 
 ---
 
+## 0.5 Code map (which function computes what)
+
+The bridge from this document to [`strategies/wyckoff.py`](../src/strategies/wyckoff.py). Each
+function is pure and independently unit-tested; `evaluate` is the only orchestrator. (For the
+*other* strategies and the conventions they all share, see
+[strategies.md](strategies.md).)
+
+| Function | This doc / book | Responsibility | Sub-score it feeds |
+|---|---|---|---|
+| `WyckoffStrategy.evaluate` | — | Orchestrator: runs the sub-steps, weights the sub-scores (`sub_weights`) into a signed composite, derives direction/conviction, packs metadata (chart markers, confirmation breakdown) + `Levels`. **A valid range is a precondition** — no range ⇒ score 0 / `none`. | (composite) |
+| `detect_trading_range` | §3, SPEC §6.1 | The support/resistance **band** over `range_lookback`, its validity gates (`range_max_width_pct`, `min_range_bars`), and `position_in_range` — the *single* "near support/resistance" definition. | — (precondition + inputs) |
+| `_range_structure_score` | §3 | Directional bias from where price sits in a valid range (ramps to ±100 at the extreme; + near support). | `range_structure` |
+| `score_volume_behavior` | §2.1–2.3 | Effort-vs-result + No Demand/No Supply + climax → signed mean of firing signals; also returns the confirmed climax bar for the chart. | `volume_behavior` |
+| `_score_climax` | §2.3 (Event #2, SC/BC) | Climax = volume spike at an extreme **and** a subsequent sharp reaction (≥ `climax_reaction_atr`×ATR); a bare spike abstains. | (into `volume_behavior`) |
+| `detect_spring_upthrust` | §2.4 (Event #5, Spring/UTAD) | False break + snapback is the **gate**; magnitude scales from a base floor to full with quality confirmations. Sets the false-break extreme in `Levels`. | `spring_upthrust` |
+| `_false_break_quality` / `_quality_to_strength` | §2.4 | Quality of the false-break bar = equal-weight mean of a rejection wick (`spring_wick_pct`) + volume corroboration; mapped to a `[base, 1]` strength. | (into `spring_upthrust`) |
+| `score_confirmation` | §4, SPEC §7 | Trend context + RS-vs-SPY + volatility contraction + MTF → signed mean; also returns the per-input breakdown logged to `signals.csv`. | `confirmation` |
+| `_relative_strength` | SPEC §7.1 | Stock return − SPY return over `trend_lookback`, scaled (`RS_FULL_SCALE`). Abstains on a short/degenerate series. | (into `confirmation`) |
+| `score_vol_contraction` | SPEC §7.2 | "The coil": recent bar ranges tightening vs earlier in the range; directionless, so direction comes from range location. | (into `confirmation`) |
+| `_recent_atr` | — | Gap-aware ATR for `Levels.atr` (the planner's ATR-stop measure). | — |
+
+Calibration seeds that live in code (not config) as first-pass defaults: `DIRECTION_FLOOR`,
+`TREND_FULL_SCALE`, `RS_FULL_SCALE`, `CONTRACTION_FULL_SCALE`, `SPRING_BASE_FRACTION`,
+`ATR_WINDOW` — all `[TUNABLE]`. Everything else is a per-timeframe config knob (§D in appendix).
+
+---
+
 ## 1. Per-stock normalization (the foundation — build this first)
 
 No two stocks share a volume or volatility profile, so absolute thresholds are meaningless

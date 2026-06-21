@@ -43,6 +43,11 @@ A living reference for the trading/market concepts this project uses, what they 
 plain terms, and **how (or whether) this codebase implements them.** Updated with each
 version. Think of it as a README for the *domain*, not the code.
 
+> For the **strategy seam + the conventions every strategy shares** (signed scores, abstain-vs-
+> neutral, weight-0 "logged but inert", how they combine), see [strategies.md](strategies.md).
+> For the Wyckoff theory→rules bridge + its code map, see
+> [wyckoff_methodology.md](wyckoff_methodology.md).
+
 ## How to use this doc
 
 - **Every entry has a status tag.** Keep them accurate — this doc's value is being honest
