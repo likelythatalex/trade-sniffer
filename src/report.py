@@ -40,6 +40,13 @@ SIGNALS_COLUMNS = (
     "feat_close_position", "made_watchlist", "transition",
 )
 
+# market.csv schema — the once-per-run, market-wide context (NOT per-ticker, so it gets its
+# own file, not a signals.csv column). One row per run/timeframe.
+MARKET_COLUMNS = (
+    "run_ts", "timeframe", "regime", "spy_above_ma", "spy_distance_pct",
+    "breadth_pct", "n_breadth", "ma_window",
+)
+
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 _TEMPLATE_NAME = "report.html.j2"
 
@@ -59,6 +66,7 @@ def render_dashboard(
     config: Config,
     today: date | None = None,
     summary: dict[str, Any] | None = None,
+    market: dict[str, Any] | None = None,
 ) -> Path:
     """Render ``report_<tf>_<date>.html`` + refresh ``latest_<tf>.html``. Returns the path.
 
@@ -81,6 +89,7 @@ def render_dashboard(
         generated_ts=today.isoformat(),
         theme=config.output.theme,
         summary=summary or {},
+        market=market or {},
         accumulation=accumulation,
         distribution=distribution,
         cards_map=cards_map,
@@ -195,6 +204,20 @@ def _migrate_schema(path: Path) -> None:
         writer.writeheader()
         for row in old_rows:
             writer.writerow({col: row.get(col, "") for col in SIGNALS_COLUMNS})
+
+
+def append_market(row: dict[str, Any], path: Path) -> None:
+    """Append one ``market.csv`` row (schema ``MARKET_COLUMNS``) — the run's market context.
+
+    Header written only when creating the file; unknown keys ignored, missing columns blank."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not path.exists() or path.stat().st_size == 0
+    with path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=MARKET_COLUMNS, extrasaction="ignore")
+        if write_header:
+            writer.writeheader()
+        writer.writerow({col: row.get(col, "") for col in MARKET_COLUMNS})
 
 
 # --- helpers ------------------------------------------------------------------

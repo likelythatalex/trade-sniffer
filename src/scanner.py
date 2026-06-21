@@ -29,14 +29,16 @@ from typing import Any
 import pandas as pd
 
 from .combiner import combine
-from .config import Config, load_config, resolve_strategy_params
+from .config import Config, load_config, resolve_market_params, resolve_strategy_params
 from .data import fetch_many, fetch_spy, resolve_exchange
 from .data_quality import QualityReport, clean
 from .features import compute_features
 from .notify import has_transitions, make_notifier
 from .review import review_candidates
+from .market_context import compute_market_context
 from .report import (
     SIGNALS_COLUMNS,
+    append_market,
     append_signals,
     render_dashboard,
     write_index_page,
@@ -181,8 +183,15 @@ def run_timeframe(
         today or date.today(), Path(config.output.dir) / "reviews.json",
     )
 
+    # Market context: one market-wide reading (regime + breadth) from the data already fetched.
+    # Displayed on the dashboard + logged to market.csv; not (yet) applied to per-ticker scores.
+    market_ma = int(resolve_market_params(config, timeframe)["ma_window"])
+    universe_closes = [fr.df["close"] for fr in fetched_all.values() if fr is not None and "close" in fr.df]
+    market = dataclasses.asdict(compute_market_context(benchmark, universe_closes, market_ma))
+    append_market({"run_ts": run_ts, "timeframe": timeframe, **market}, Path(config.output.dir) / "market.csv")
+
     summary = {**counts, "skipped_detail": skipped_detail, "errored_detail": errored_detail}
-    render_dashboard(cards, timeframe, config, today=today, summary=summary)
+    render_dashboard(cards, timeframe, config, today=today, summary=summary, market=market)
     write_index_page(config)  # gh-pages landing page so the bare Pages URL isn't a 404
     if config.output.write_tv_import_file:
         write_tv_import_file(cards, timeframe, config)

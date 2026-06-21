@@ -149,6 +149,18 @@ insider:
     weekly:
       lookback_days: 180        # a weekly bar spans more time; widen the sparse-signal window
 
+# §12 Market context — a once-per-run, market-wide reading (NOT a per-ticker strategy):
+# regime (SPY vs its trend MA) + breadth (% of the scanned universe above their own MA).
+# Displayed on the dashboard + logged to market.csv; does NOT yet scale per-ticker scores
+# (annotate first — a market-wide reading can't be calibrated the per-ticker way). [TUNABLE].
+market:
+  defaults:
+    ma_window: 200              # trend MA for the SPY regime + the per-stock breadth test (~200 days)
+  per_timeframe:
+    daily: {}                   # uses defaults
+    weekly:
+      ma_window: 40             # ~40 weeks ≈ 200 trading days
+
 scoring:
   watchlist_threshold: 70       # 0-100 final composite; >= this gets written out
 

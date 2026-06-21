@@ -554,6 +554,10 @@ holds the prior run's qualifying set per timeframe):
   columns are strategy-agnostic (produced by `features.py`).
 - This is the audit trail, the dedup source, and the dataset for future backtesting AND
   cross-strategy correlation analysis (§7 / §6 combiner).
+- **`output/market.csv`** (sibling log, `report.append_market`): the once-per-run **market
+  context** — `run_ts, timeframe, regime, spy_above_ma, spy_distance_pct, breadth_pct,
+  n_breadth, ma_window`. It is market-wide (not per-ticker), so it is its own file rather than
+  a `signals.csv` column. See §12 "Market context".
 
 ### 8.5 Agent reviewer (`review.py`) — objective due diligence, precomputed
 
@@ -738,6 +742,16 @@ can be wrong, do your own research.
     cutoff on the **filing** date. Whole-universe; the literal version of Wyckoff's "composite
     operator". Unlike sentiment it **is** replay-backtestable (EDGAR history). Future sources:
     Finnhub; future scoring: role/size weighting, cluster bonuses.
+- **Market context** (`market_context.py`) — a once-per-run, market-wide layer, *distinct from
+  the per-ticker `Strategy` seam* (it can't be calibrated the per-ticker way). **Phase 1 (built):**
+  regime (SPY vs its `ma_window` MA) + breadth (% of the scanned universe above their own MA),
+  resolved per timeframe, computed from data already fetched, **displayed + logged to
+  `market.csv`** but not yet applied to scores. **Phase 2 (future):** macro/intermarket — rates
+  + rates-vol (TLT/^TNX/MOVE), credit risk appetite (HY spreads), intermarket ratios (IWM vs
+  QQQ, etc.). **Phase 3 (future):** cycle positioning (reuse Wyckoff on indices/sector ETFs).
+  Applied at the composite/report layer (annotate → later scale → maybe gate), never inside a
+  per-ticker score. A live intraday risk monitor is a *separate* product (always-on, not the
+  EOD batch). See ROADMAP "Market context & macro monitoring".
 - **Telegram notification channel** behind the §8.3 `notify.py` interface (adds
   bot-token/chat-id config; v1 is Discord-only).
 - **Confirmation stacking**: combiner raises conviction when independent strategies agree.

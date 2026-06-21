@@ -32,6 +32,11 @@ CHANGE-MARK (refinement pass, aligned to SPEC §6.1/§6.4):
   • New "Insider Transactions (strategy)" entry; Confirmation Stacking + Correlation Awareness
     updated to four strategies; §D table gains insider params. signals.csv → v5 (insider_score).
     EDGAR Form 4 source; relative net-buy ratio scoring; backtestable (unlike sentiment). §6/§12.
+
+  Market-context pass (Phase 1 — a market-wide layer, NOT a strategy):
+  • New "Market Context (regime & breadth)" entry; `market_context.py` + `market.csv`
+    (append_market). Regime (SPY vs MA) + breadth (% of universe above MA), displayed + logged,
+    not yet applied to scores. Macro/intermarket + cycle are FUTURE. SPEC §12.
 -->
 
 A living reference for the trading/market concepts this project uses, what they mean in
@@ -289,6 +294,24 @@ version. Think of it as a README for the *domain*, not the code.
   tested (`tests/test_insider.py`). The live EDGAR fetch shape is best-effort (the pure parser
   is the tested contract); role/size weighting, cluster bonuses, Finnhub source, and weight
   calibration are `FUTURE`. SPEC §6/§12; ROADMAP.
+
+### Market Context (regime & breadth)
+- **Plain meaning:** Before judging a single stock, know the weather — is the broad market
+  trending up with wide participation (risk-on) or breaking down (risk-off)? A Wyckoff long in
+  a confirmed downtrend market is structurally lower-probability.
+- **How it's implemented here:** `market_context.py` (pure) computes **once per run** from data
+  already fetched: **regime** (SPY's last close vs its `ma_window` MA — blended with breadth into
+  risk-on / risk-off / neutral / unknown) and **breadth** (% of the scanned universe above their
+  own MA; names with too little history are excluded from the denominator, not coerced). Resolved
+  per timeframe (~200-day / ~40-week) via `resolve_market_params`. It is **market-wide, not a
+  `Strategy`** — it lives in its own module, is shown on the dashboard header, and is logged to
+  its own **`market.csv`** (not a `signals.csv` column).
+- **Not yet applied to scores:** a market-wide reading can't be calibrated the per-ticker way, so
+  v1 is **displayed context only** (annotate first; scale/gate later once its value shows).
+- **Status:** `PARTIAL` (Phase 1) (`market_context.py` + `report.append_market`, tested in
+  `tests/test_market_context.py`). Macro/intermarket (rates/MOVE, HY spreads, IWM-vs-QQQ) and
+  cycle positioning are `FUTURE`; a live intraday risk monitor is a separate product. SPEC §12;
+  ROADMAP "Market context & macro monitoring".
 
 ### Survivorship Bias
 - **Plain meaning:** Testing only on stocks that exist today overstates results (you've

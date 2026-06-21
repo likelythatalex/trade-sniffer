@@ -64,6 +64,8 @@ Detail/status per concept lives in `appendix.md`; definitions in `wyckoff_method
 | **Agent reviewer** | DONE (v1: bounded) | `src/review.py` — proactive, objective due-diligence pass on NEWLY-flagged setups, precomputed at scan time (Anthropic REST via `requests`, no SDK dep), baked into the dashboard. Strategy-agnostic (consumes the card contract), fail-soft, framed as review-aid-not-advice. Cost controls: off by default, NEW-only, per-run cap, cheap model, bounded output, cached by `timeframe:ticker`. Future: tool-using (deeper) agency. SPEC §8.5. |
 | **Discord static chart PNG preview** | TODO | Glanceable image attached to the notification (the dashboard stays the inspection surface). SPEC §12. |
 | **Dashboard: toggle to view recently failed setups** | TODO | Review/reflect affordance — show recently *invalidated* setups, not just current qualifiers. Scanner already classifies `failed`; surface those cards behind a UI toggle. Optionally feed the reviewer the setup's `transition`/episode history so a re-flagged setup is reviewed in context (the agent currently sees only the as-of snapshot). |
+| **Dashboard: enlarge the chart** | TODO | The shared chart currently takes too little vertical space — give it the dominant area (e.g. taller fixed/`vh`-based height, or a click-to-expand/full-screen view) since inspecting the annotated chart is the main job of the page. Pure template/CSS. |
+| **Dashboard: mobile-responsive layout** | TODO | On narrow viewports the side-by-side list+chart cramps. Stack the layout and **hide the chart while keeping everything else** (candidate list, scores, reasons, plan, review) — the TradingView "open in TV ↗" link covers charting on mobile. Pure template/CSS (media queries); no data change. |
 
 ## Trade layer (planner + local journal) — COMPLETE
 
@@ -111,7 +113,7 @@ per-ticker score. Design it so each macro input is "a fetch + a reading," the wa
 
 | Phase | Status | What |
 |---|---|---|
-| 1. Regime + breadth | TODO (next) | SPY trend (vs 200-dma) + **breadth** (% of the scanned universe above its 200-dma — nearly free; we already scan everyone). Emit a `MarketContext`; first **annotate + log** it (dashboard + a market column), then **scale** conviction (risk-off down-weights longs), and only maybe **gate**. |
+| 1. Regime + breadth | DONE | `market_context.py` (pure): regime (SPY vs its `ma_window` MA, blended with breadth → risk-on/off/neutral/unknown) + **breadth** (% of the scanned universe above their own MA), resolved per timeframe, computed from data already fetched. **Annotated** on the dashboard header + **logged** to `market.csv` (`report.append_market`). Not yet applied to scores (annotate-first; can't calibrate a market-wide reading per-ticker). Tested. |
 | 2. Macro / intermarket | TODO | Rates + rates-vol (`^TNX` / TLT / MOVE), credit risk appetite (HYG/JNK vs IEF — junk-bond spreads), intermarket ratios (IWM small-caps vs QQQ growth, value/growth, defensives/cyclicals), sector rotation/correlation. Most free via yfinance ETFs; MOVE needs a source check. |
 | 3. Cycle positioning | TODO | "Where are we in the cycle" — partly **reuse the Wyckoff engine on SPY/sector ETFs** (index-level accumulation/markup/distribution/markdown = Wyckoff applied to the market) plus the Phase-2 intermarket ratios. |
 

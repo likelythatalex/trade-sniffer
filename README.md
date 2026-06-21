@@ -63,6 +63,7 @@ python -m src.scanner --timeframe daily --threshold 30
 | `index.html` | Landing page linking the latest daily/weekly dashboards |
 | `watchlist_<tf>.txt` | TradingView-importable symbol list |
 | `signals.csv` | Append-only log of **every** evaluated ticker (the calibration/backtest dataset) |
+| `market.csv` | Append-only **market context** per run (regime + breadth; market-wide, not per-ticker) |
 | `state.json` | Prior-run qualifiers (drives dedup + the multi-timeframe cross-read) |
 
 The dashboard shows a ranked candidate list beside **one shared annotated chart** (TradingView

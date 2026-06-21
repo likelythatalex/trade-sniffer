@@ -133,6 +133,17 @@ class InsiderConfig:
 
 
 @dataclass(frozen=True)
+class MarketConfig:
+    """Market-context params (SPEC §12) — same defaults+per_timeframe shape. Market context is
+    a once-per-run, market-wide reading (regime + breadth), NOT a per-ticker strategy. Holds
+    ``ma_window`` (the trend MA for the SPY regime + the per-stock breadth test; ~200 day /
+    ~40 week)."""
+
+    defaults: dict[str, Any]
+    per_timeframe: dict[str, dict[str, Any]]
+
+
+@dataclass(frozen=True)
 class ScoringConfig:
     watchlist_threshold: float
 
@@ -205,6 +216,7 @@ class Config:
     momentum: MomentumConfig
     sentiment: SentimentConfig
     insider: InsiderConfig
+    market: MarketConfig
     scoring: ScoringConfig
     trade_plan: TradePlanConfig
     review: ReviewConfig
@@ -264,6 +276,13 @@ def resolve_strategy_params(config: Config, name: str, timeframe: str) -> dict[s
     raise ConfigError(f"No params resolver for strategy '{name}'.")
 
 
+def resolve_market_params(config: Config, timeframe: str) -> dict[str, Any]:
+    """Market-context params for ``timeframe`` (``defaults`` overlaid with ``per_timeframe``).
+    Market context isn't a strategy, so it has its own resolver rather than going through
+    ``resolve_strategy_params``."""
+    return _merge_timeframe(config.market.defaults, config.market.per_timeframe, timeframe)
+
+
 def scoring_window(config: Config, timeframe: str) -> int:
     """Deepest historical lookback (bars) the strategy needs for ``timeframe`` —
     the max over the resolved depth-lookback params (see ``_DEPTH_LOOKBACK_PARAMS``)."""
@@ -300,6 +319,7 @@ def _build_config(raw: dict) -> Config:
     momentum = _require(raw, "momentum", "")
     sentiment = _require(raw, "sentiment", "")
     insider = _require(raw, "insider", "")
+    market = _require(raw, "market", "")
     scoring = _require(raw, "scoring", "")
     trade_plan = _require(raw, "trade_plan", "")
     review = _require(raw, "review", "")
@@ -369,6 +389,13 @@ def _build_config(raw: dict) -> Config:
             per_timeframe={
                 tf: dict(overrides or {})
                 for tf, overrides in _require(insider, "per_timeframe", "insider.").items()
+            },
+        ),
+        market=MarketConfig(
+            defaults=dict(_require(market, "defaults", "market.")),
+            per_timeframe={
+                tf: dict(overrides or {})
+                for tf, overrides in _require(market, "per_timeframe", "market.").items()
             },
         ),
         scoring=ScoringConfig(
@@ -446,6 +473,10 @@ def _validate(config: Config) -> None:
     # Insider needs a positive look-back; source validated lazily (build_insider_source).
     if int(config.insider.defaults.get("lookback_days", 0)) <= 0:
         raise ConfigError("insider.defaults.lookback_days must be a positive integer.")
+
+    # Market context needs a positive trend MA window (regime + breadth).
+    if int(config.market.defaults.get("ma_window", 0)) <= 0:
+        raise ConfigError("market.defaults.ma_window must be a positive integer.")
 
     # v1 ships Discord only.
     if config.output.notify.channel != "discord":

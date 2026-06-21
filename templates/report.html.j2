@@ -58,12 +58,25 @@
     .empty { opacity: .6; padding: 2rem 0; }
     .chart-legend { font-size: .8rem; opacity: .75; line-height: 1.5; margin: .5rem 0 0; }
     .chart-legend em { font-style: normal; font-weight: 600; }
+    .market { font-size: .9rem; margin: .2rem 0; padding: .25rem .5rem; border-radius: 4px; display: inline-block; }
+    .market.regime-risk-on { background: rgba(38,166,154,.15); }
+    .market.regime-risk-off { background: rgba(239,83,80,.15); }
+    .market.regime-neutral, .market.regime-unknown { background: rgba(128,128,128,.15); }
+    .market-note { opacity: .6; font-size: .8rem; }
   </style>
   <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
   <header>
     <h1>{{ title }} — {{ timeframe | capitalize }}</h1>
+    {% if market.regime %}
+    <p class="market regime-{{ market.regime }}">
+      Market: <strong>{{ market.regime }}</strong>
+      {%- if market.breadth_pct is not none %} · breadth {{ '%.0f' | format(market.breadth_pct) }}%{% endif %}
+      {%- if market.spy_distance_pct is not none %} · SPY {{ '%+.1f' | format(market.spy_distance_pct) }}% vs {{ market.ma_window }}-bar MA{% endif %}
+      <span class="market-note">(context only — not yet applied to scores)</span>
+    </p>
+    {% endif %}
     <p class="summary">
       Generated {{ generated_ts }}
       · scanned {{ summary.scanned | default('?') }}

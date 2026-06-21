@@ -107,6 +107,20 @@ def test_append_signals_migrates_older_schema(tmp_path: Path) -> None:
     assert data["NEW"][close_idx] == "101.5"     # new row aligned under the new header
 
 
+def test_append_market_writes_header_once(tmp_path: Path) -> None:
+    path = tmp_path / "market.csv"
+    row = {"run_ts": "2024-06-01T22:00:00Z", "timeframe": "daily", "regime": "risk-on",
+           "spy_above_ma": True, "spy_distance_pct": 3.2, "breadth_pct": 61.0,
+           "n_breadth": 500, "ma_window": 200}
+    report.append_market(row, path)
+    report.append_market({**row, "regime": "neutral"}, path)  # 2nd run -> no new header
+
+    rows = list(csv.reader(path.read_text(encoding="utf-8").splitlines()))
+    assert rows[0] == list(report.MARKET_COLUMNS)
+    assert len(rows) == 3  # header + 2 rows
+    assert rows[1][report.MARKET_COLUMNS.index("regime")] == "risk-on"
+
+
 def test_write_tv_import_file(tmp_path: Path) -> None:
     path = report.write_tv_import_file(CARDS, "daily", config_with_output(tmp_path))
     text = path.read_text(encoding="utf-8")
