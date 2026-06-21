@@ -53,7 +53,13 @@
     .verdict.aligned { background: #1b5e2099; }
     .verdict.mixed { background: #8a6d1d99; }
     .verdict.skeptical { background: #7f1d1d99; }
-    #chart { height: 460px; margin-top: .5rem; border: 1px solid var(--line); border-radius: 6px; }
+    /* The annotated chart is the main event — give it the dominant area (scales with viewport). */
+    #chart { height: 72vh; min-height: 420px; margin-top: .35rem; border: 1px solid var(--line); border-radius: 6px; }
+    #chart:fullscreen { height: 100vh; min-height: 0; border: 0; border-radius: 0; background: var(--bg); }
+    .chart-tools { display: flex; justify-content: flex-end; margin-top: .5rem; }
+    .chart-tools button { font: inherit; font-size: .8rem; cursor: pointer; padding: .2rem .6rem;
+      color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 6px; }
+    .chart-tools button:hover { border-color: #888; }
     footer { margin-top: 1.5rem; font-size: .85rem; opacity: .7; }
     .empty { opacity: .6; padding: 2rem 0; }
     .chart-legend { font-size: .8rem; opacity: .75; line-height: 1.5; margin: .5rem 0 0; }
@@ -63,6 +69,14 @@
     .market.regime-risk-off { background: rgba(239,83,80,.15); }
     .market.regime-neutral, .market.regime-unknown { background: rgba(128,128,128,.15); }
     .market-note { opacity: .6; font-size: .8rem; }
+    /* Mobile: stack the layout and HIDE the chart (keep list/scores/reasons/plan/review).
+       Charting on a phone is covered by the "open in TradingView" link. */
+    @media (max-width: 760px) {
+      body { padding: 1rem; }
+      .layout { flex-direction: column; }
+      .list { flex-basis: auto; width: 100%; max-height: 45vh; }
+      #chart, .chart-tools, .chart-legend { display: none; }
+    }
   </style>
   <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
@@ -119,6 +133,7 @@
       <div class="plan" id="p-plan" hidden></div>
       <div class="review" id="p-review" hidden></div>
       <a class="tvlink" id="p-tvlink" target="_blank" rel="noopener"></a>
+      <div class="chart-tools"><button id="fs-btn" type="button" title="Toggle full screen">⤢ Fullscreen</button></div>
       <div id="chart"></div>
       <p class="chart-legend">
         <strong>Reading the chart (Wyckoff):</strong>
@@ -168,9 +183,13 @@
       chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     }
 
-    function render(ticker) {
-      const c = DATA[ticker];
-      if (!c) return;
+    function chartVisible() {
+      // The chart is hidden on mobile via CSS; skip chart work (and avoid creating a
+      // zero-size chart) when the container isn't displayed.
+      return getComputedStyle(document.getElementById("chart")).display !== "none";
+    }
+
+    function drawChart(c) {
       ensureChart();
       candleSeries.setData(c.chart.candles);
       volSeries.setData(c.chart.volume.map((b) => ({
@@ -205,6 +224,13 @@
         .sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));  // setMarkers needs ascending time
       candleSeries.setMarkers(markers);
       chart.timeScale().fitContent();
+    }
+
+    function render(ticker) {
+      const c = DATA[ticker];
+      if (!c) return;
+      // Chart is hidden on mobile (CSS) — skip drawing it there; everything below still renders.
+      if (chartVisible()) drawChart(c);
 
       // Header / details.
       document.getElementById("p-ticker").textContent = c.ticker;
@@ -268,6 +294,13 @@
     }
 
     document.querySelectorAll(".row").forEach((r) => r.addEventListener("click", () => render(r.dataset.ticker)));
+
+    // Fullscreen toggle for the chart (autoSize resizes it via its ResizeObserver).
+    document.getElementById("fs-btn").addEventListener("click", () => {
+      const el = document.getElementById("chart");
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (el.requestFullscreen) el.requestFullscreen();
+    });
 
     // Select the top candidate on load (accumulation first, then distribution).
     const first = document.querySelector(".row");
