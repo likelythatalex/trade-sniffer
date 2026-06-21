@@ -83,6 +83,14 @@ def test_build_review_prompt_includes_evidence() -> None:
     assert "XOM" in prompt and "accumulation" in prompt and "82" in prompt
     assert "volume_behavior" in prompt and "spring at support" in prompt
     assert "100.0" in prompt and "110.0" in prompt  # range bounds
+    assert "first time flagged" in prompt  # no prior history -> stated explicitly
+
+
+def test_build_review_prompt_includes_episode_history() -> None:
+    card = _card("XOM")
+    card["episode_history"] = "Flagged once before on this timeframe. Most recent prior episode: ..."
+    prompt = build_review_prompt(card)
+    assert "Prior episode history: Flagged once before" in prompt
 
 
 def test_reviews_cache_round_trip_and_tolerant(tmp_path: Path) -> None:
@@ -178,13 +186,28 @@ def test_reviews_capped_per_run(tmp_path: Path) -> None:
 
 
 def test_reviews_use_cache_and_dont_respend(tmp_path: Path) -> None:
+    # Same-day re-run: a review cached TODAY is not regenerated (idempotent, no re-spend).
     path = tmp_path / "r.json"
-    save_reviews(path, {"daily:AAA": {"text": "cached", "verdict": "mixed"}})
+    today = date(2024, 6, 1)
+    save_reviews(path, {"daily:AAA": {"text": "cached", "verdict": "mixed", "date": today.isoformat()}})
     cards = [_card("AAA")]
     stub = StubReviewer()
-    review_candidates(cards, {"AAA": "new"}, "daily", _review_config(), date(2024, 6, 1), path, stub)
-    assert stub.calls == 0  # already cached -> no LLM call
+    review_candidates(cards, {"AAA": "new"}, "daily", _review_config(), today, path, stub)
+    assert stub.calls == 0  # already reviewed today -> no LLM call
     assert cards[0]["review"]["text"] == "cached"  # cached review still shown
+
+
+def test_reflag_regenerates_stale_review(tmp_path: Path) -> None:
+    # A re-flagged setup whose cached review is from a PRIOR episode (earlier day) is stale —
+    # regenerate it (so it's reviewed against its history), unlike a same-day re-run.
+    path = tmp_path / "r.json"
+    save_reviews(path, {"daily:AAA": {"text": "old episode", "verdict": "aligned", "date": "2024-05-01"}})
+    cards = [_card("AAA")]
+    cards[0]["episode_history"] = "Flagged once before on this timeframe."
+    stub = StubReviewer()
+    review_candidates(cards, {"AAA": "new"}, "daily", _review_config(), date(2024, 6, 1), path, stub)
+    assert stub.calls == 1  # stale prior-episode review -> regenerated
+    assert cards[0]["review"]["text"] == "Verdict: aligned\nLooks fine."  # fresh review shown
 
 
 def test_disabled_reviewer_attaches_cached_but_generates_nothing(tmp_path: Path) -> None:

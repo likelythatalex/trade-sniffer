@@ -106,6 +106,28 @@ def test_failed_setups_builds_from_transitions() -> None:
     assert failed[1]["current_score"] is None  # GE not evaluated this run
 
 
+def test_attach_episode_history_marks_reflags() -> None:
+    runs = [f"2026-01-0{i}T22:00:00+00:00" for i in range(1, 4)]
+
+    def row(run_ts, ticker, made):
+        return {"run_ts": run_ts, "ticker": ticker, "timeframe": "daily",
+                "made_watchlist": str(made), "composite_score": "60.0", "direction": "accumulation"}
+
+    # Both AAA and BBB had one prior episode (qualified run 1, gone by the latest run).
+    history_rows = [
+        row(runs[0], "AAA", True), row(runs[1], "AAA", False), row(runs[2], "AAA", False),
+        row(runs[0], "BBB", True), row(runs[1], "BBB", False), row(runs[2], "BBB", False),
+    ]
+    cards = [{"ticker": "AAA"}]
+    failed = [{"ticker": "BBB"}]
+    scanner._attach_episode_history(cards, failed, history_rows, "daily")
+
+    assert cards[0]["prior_episode_count"] == 1
+    assert "episode_history" in cards[0]  # cards get the human-readable line
+    assert failed[0]["prior_episode_count"] == 1
+    assert "episode_history" not in failed[0]  # failed entries get only the count
+
+
 def _patch_fetch(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, FetchResult]) -> None:
     """Stub the batch fetch, lazy exchange, and SPY benchmark so run_timeframe stays
     hermetic. Benchmark defaults to None (RS abstains) → existing scores unchanged."""

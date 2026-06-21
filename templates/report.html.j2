@@ -33,6 +33,10 @@
     .dir { text-transform: uppercase; font-size: .62rem; padding: .1rem .35rem; border-radius: 4px; }
     .dir.accumulation { background: #1b5e2099; }
     .dir.distribution { background: #7f1d1d99; }
+    /* Re-flag badge: this ticker has prior (since-invalidated) episodes on this timeframe. */
+    .reflag { font-size: .58rem; padding: .08rem .3rem; border-radius: 4px; background: #8a6d1d66; }
+    .history { font-size: .82rem; opacity: .85; margin: .4rem 0; padding: .35rem .6rem;
+               border-left: 3px solid #8a6d1d99; background: #8a6d1d14; border-radius: 4px; }
     .panel-head { display: flex; flex-wrap: wrap; gap: .75rem; align-items: baseline; }
     .panel-head .tkr { font-size: 1.4rem; font-weight: 700; }
     .panel-head .scr { font-size: 1.2rem; font-weight: 700; margin-left: auto; }
@@ -117,6 +121,7 @@
   <div class="row" data-ticker="{{ c.ticker }}">
     <span class="tkr">{{ c.ticker }}</span>
     <span class="dir {{ c.direction }}">{{ c.direction[:4] }}</span>
+    {% if c.prior_episode_count %}<span class="reflag" title="re-flagged — {{ c.prior_episode_count }} prior episode(s) on this timeframe">↻{{ c.prior_episode_count }}</span>{% endif %}
     <span class="scr">{{ '%.0f' | format(c.score) }}</span>
   </div>
   {% endmacro %}
@@ -136,6 +141,7 @@
         <div class="failed-row">
           <span class="tkr">{{ f.ticker }}</span>
           <span class="dir {{ f.direction }}">{{ f.direction[:4] }}</span>
+          {% if f.prior_episode_count %}<span class="reflag" title="{{ f.prior_episode_count }} prior episode(s)">↻{{ f.prior_episode_count }}</span>{% endif %}
           <span class="failed-scr">{{ '%.0f' | format(f.prior_score) }} →
             {%- if f.current_score is not none %} {{ '%.0f' | format(f.current_score) }}{% else %} n/a{% endif %}</span>
         </div>
@@ -151,6 +157,7 @@
         <span class="scr" id="p-score"></span>
       </div>
       <div class="subscores" id="p-subscores"></div>
+      <div class="history" id="p-history" hidden></div>
       <ul class="reasons" id="p-reasons"></ul>
       <div class="plan" id="p-plan" hidden></div>
       <div class="review" id="p-review" hidden></div>
@@ -262,6 +269,11 @@
       document.getElementById("p-subscores").innerHTML =
         Object.entries(c.sub_scores).map(([k, v]) => `<span>${k}: ${v >= 0 ? "+" : ""}${v.toFixed(0)}</span>`).join("");
       document.getElementById("p-reasons").innerHTML = (c.reasons || []).map((r) => `<li>${r}</li>`).join("");
+
+      // Episode history (app-generated text → textContent is safe). Hidden for first-time flags.
+      const hist = document.getElementById("p-history");
+      if (c.episode_history) { hist.hidden = false; hist.textContent = "↻ " + c.episode_history; }
+      else { hist.hidden = true; }
 
       // Suggested trade plan (precomputed, display-only — these values are app-generated
       // numbers + our own management strings, so innerHTML is safe here; never auto-traded).

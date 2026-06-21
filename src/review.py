@@ -205,7 +205,7 @@ def review_candidates(
         reviewer = make_reviewer(rcfg)
 
     if reviewer is not None:
-        to_generate = _select_for_review(cards, transitions, cache, timeframe, rcfg)
+        to_generate = _select_for_review(cards, transitions, cache, timeframe, rcfg, today)
         for card in to_generate:
             try:
                 result = reviewer.review(build_review_prompt(card))
@@ -228,17 +228,42 @@ def _select_for_review(
     cache: dict[str, Any],
     timeframe: str,
     rcfg: ReviewConfig,
+    today: date,
 ) -> list[dict[str, Any]]:
-    """NEW (or, if only_new is false, any) flagged cards without a cached review, highest
-    score first, capped at ``max_reviews_per_run``."""
+    """Flagged cards needing a (re)review, highest score first, capped at
+    ``max_reviews_per_run``. See ``_needs_review`` for the per-card rule."""
     candidates = [
         card
         for card in cards
-        if (not rcfg.only_new or transitions.get(card["ticker"]) == "new")
-        and _key(timeframe, card["ticker"]) not in cache
+        if _needs_review(card, transitions.get(card["ticker"]), cache, timeframe, rcfg, today)
     ]
     candidates.sort(key=lambda card: card.get("score", 0.0), reverse=True)
     return candidates[: rcfg.max_reviews_per_run]
+
+
+def _needs_review(
+    card: dict[str, Any],
+    transition: str | None,
+    cache: dict[str, Any],
+    timeframe: str,
+    rcfg: ReviewConfig,
+    today: date,
+) -> bool:
+    """Whether to (re)generate a review for one card.
+
+    - Skip non-NEW transitions when ``only_new`` (the default) — continuing setups reuse their
+      review.
+    - Generate when there's no cached review.
+    - **Re-flag:** a NEW setup whose cached review is from an *earlier day* is stale (it belongs
+      to a prior, since-invalidated episode) — regenerate so it's reviewed against its history.
+      A same-day re-run (cache dated today) does NOT re-spend.
+    """
+    if rcfg.only_new and transition != "new":
+        return False
+    cached = cache.get(_key(timeframe, card["ticker"]))
+    if cached is None:
+        return True
+    return transition == "new" and cached.get("date") != today.isoformat()
 
 
 def build_review_prompt(card: dict[str, Any]) -> str:
@@ -252,6 +277,7 @@ def build_review_prompt(card: dict[str, Any]) -> str:
         f"  {c['time']}: O{c['open']} H{c['high']} L{c['low']} C{c['close']}" for c in recent
     )
     last_close = recent[-1]["close"] if recent else "n/a"
+    history = card.get("episode_history") or "none — first time flagged on this timeframe"
     return (
         f"Setup: {card['ticker']} — {card['direction']} — conviction {card['score']:.0f}/100\n"
         f"Sub-scores (signed, + = accumulation): {sub or '(none)'}\n"
@@ -259,6 +285,7 @@ def build_review_prompt(card: dict[str, Any]) -> str:
         f"Trading range: low {chart.get('range_low')} / high {chart.get('range_high')}; "
         f"last close {last_close}\n"
         f"Spring/upthrust marker: {chart.get('marker') or 'none'}\n"
+        f"Prior episode history: {history}\n"
         f"Recent bars (oldest→newest):\n{bars or '  (none)'}\n\n"
         "Review this setup per your rubric."
     )

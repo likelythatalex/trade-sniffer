@@ -394,6 +394,23 @@ version. Think of it as a README for the *domain*, not the code.
 - **Status:** `IMPLEMENTED` (`state.py` + `scanner.py`, tested in `tests/test_state.py` and
   `tests/test_scanner.py`): dedup transitions stamped on signals.csv, MTF cross-read wired.
 
+### Episode / Transition History
+- **Plain meaning:** A setup that flags, runs a while, then invalidates is one *episode*; if it
+  re-qualifies later, that's a second. Knowing a candidate has flagged-and-failed before is
+  context a human (and the agent reviewer) should have — a third attempt at the same level reads
+  differently from a first.
+- **How it's implemented here:** `episodes.py` (pure) reconstructs episodes from the append-only
+  `signals.csv` (grouping a ticker's consecutive `made_watchlist` runs per timeframe; a gap =
+  a new episode), rather than persisting a separate structure — one source of truth, no schema
+  change, and the same reconstruction the future failed→revived study (ROADMAP) will reuse. The
+  scanner reads the log *before* appending the current run (so it's pure prior history) and
+  attaches a `prior_episode_count` (→ a `↻N` badge on the dashboard) + a one-line
+  `episode_history` summary (→ the panel + the reviewer prompt) to flagged cards and the
+  recently-invalidated list.
+- **Status:** `IMPLEMENTED` (`episodes.py` + `scanner.py` + `report.read_signals`, tested in
+  `tests/test_episodes.py`; wired through the reviewer + dashboard). Reuses the existing log; no
+  schema bump.
+
 ### Embedded Charts / Dashboard
 - **Plain meaning:** Find and inspect candidates in one place rather than exporting to
   another app.
@@ -404,6 +421,8 @@ version. Think of it as a README for the *domain*, not the code.
   result metadata): range band labelled **Creek/ICE**, Phase-C **Spring ▲ / UTAD ▼** markers,
   confirmed **SC/BC** climax markers, the suggested entry/stop/target lines, and a short
   Wyckoff legend caption under the chart. Keeps an "open in TradingView" link + attribution.
+  Re-flagged setups carry a `↻N` badge + a prior-episode history line (see *Episode / Transition
+  History*); a collapsed "Recently invalidated" list shows setups that dropped off this run.
   Plus `write_tv_import_file` (secondary `.txt`), `write_index_page` (`index.html` landing
   page), and `append_signals` (schema-stable, self-migrating log).
 - **Status:** `IMPLEMENTED` (`report.py`, tested in `tests/test_report.py`); wired
@@ -433,7 +452,10 @@ version. Think of it as a README for the *domain*, not the code.
   local Ollama for free + private runs. Baked into the dashboard (text only, never
   HTML-injected). The same interface drives the **private post-trade journal reflection**
   (`journal review`, a different rubric). Never gives trading advice. Cost-bounded: off by
-  default, NEW-only, per-run cap, cheap model, bounded output, cached; fail-soft.
+  default, NEW-only, per-run cap, cheap model, bounded output, cached; fail-soft. The prompt
+  also carries the setup's **prior-episode history** (see *Episode / Transition History*), so a
+  re-flagged setup is reviewed in context; such a re-flag regenerates its (stale, prior-episode)
+  review once per day rather than showing the dead episode's review.
 - **Status:** `IMPLEMENTED` (v1, bounded) (`review.py` + `scanner.py` + `journal.py`, tested in
   `tests/test_review.py`). `FUTURE`: tool-using (deeper) agency; multimodal review of the
   rendered chart image.

@@ -181,3 +181,18 @@ def test_render_dashboard_omits_failed_section_when_none(tmp_path: Path) -> None
     cfg = config_with_output(tmp_path)
     html = report.render_dashboard(CARDS, "daily", cfg, today=date(2024, 6, 1)).read_text(encoding="utf-8")
     assert "Recently invalidated" not in html
+
+
+def test_render_dashboard_shows_episode_badge(tmp_path: Path) -> None:
+    cfg = config_with_output(tmp_path)
+    card = {**CARDS[0], "prior_episode_count": 2,
+            "episode_history": "Flagged 2 times before on this timeframe."}
+    failed = [{"ticker": "TSLA", "direction": "accumulation", "prior_score": 74.0,
+               "current_score": 58.0, "prior_episode_count": 3}]
+    html = report.render_dashboard(
+        [card], "daily", cfg, today=date(2024, 6, 1), failed=failed
+    ).read_text(encoding="utf-8")
+
+    assert "↻2" in html  # re-flag badge on the candidate row
+    assert "↻3" in html  # and on the invalidated entry
+    assert "Flagged 2 times before" in html  # history text embedded for the panel

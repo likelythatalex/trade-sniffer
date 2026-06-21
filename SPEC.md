@@ -580,7 +580,15 @@ skeptical rubric* to every candidate, and emits a structured verdict. It reviews
   transitions only** (continuing setups reuse the cache); a hard **per-run cap**
   (`max_reviews_per_run`); a cheap model (`review.model`, default Haiku); bounded output
   (`max_tokens`) and a compact prompt; reviews cached by `timeframe:ticker` in `reviews.json`
-  (carried on gh-pages) so same-day re-runs and continuing setups never re-spend.
+  (carried on gh-pages) so same-day re-runs and continuing setups never re-spend. A
+  **re-flagged** setup (NEW again after a prior episode invalidated) regenerates its review —
+  its cached one is from a since-dead episode — but only once per day (the cache entry carries
+  the review `date`), so a same-day re-run still doesn't re-spend.
+- **Episode (transition) history in the prompt.** The reviewer is fed a one-line summary of the
+  setup's *prior* episodes on that timeframe (reconstructed from `signals.csv` by `episodes.py`,
+  §8.4), so a re-flagged setup is judged in context ("flagged twice before, both invalidated")
+  rather than as a fresh as-of snapshot. The dashboard shows the same: a `↻N` badge + the
+  history line.
 - **Pluggable + fail-soft** (mirrors `notify.py`): the `Reviewer` interface allows another
   provider; no key or a failed call simply omits the review and the run continues.
 - **Provider:** `anthropic` (REST Messages API) or `ollama` (local GPU, native `/api/chat`) —

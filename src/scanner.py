@@ -36,10 +36,12 @@ from .features import compute_features
 from .notify import has_transitions, make_notifier
 from .review import review_candidates
 from .market_context import compute_market_context
+from .episodes import format_episode_history, prior_episodes, reconstruct_episodes
 from .report import (
     SIGNALS_COLUMNS,
     append_market,
     append_signals,
+    read_signals,
     render_dashboard,
     write_index_page,
     write_tv_import_file,
@@ -182,6 +184,12 @@ def run_timeframe(
     # skipped). Surfaced behind a dashboard toggle so an invalidation is visible, not silent.
     failed = _failed_setups(transitions, prior_tf_state, signal_rows)
 
+    # Episode (transition) history: reconstruct prior flags from the EXISTING signals.csv
+    # (this run isn't appended yet → pure prior history) and attach to cards + failed setups, so
+    # a re-flagged setup is shown — and reviewed — in the context of its past episodes.
+    history_rows = read_signals(Path(config.output.dir) / "signals.csv")
+    _attach_episode_history(cards, failed, history_rows, timeframe)
+
     # Objective due-diligence review of NEWLY-flagged setups (bounded/cached/off by default),
     # attached to the cards before rendering so it shows on the dashboard.
     review_candidates(
@@ -303,6 +311,28 @@ def _failed_setups(
     ]
     failed.sort(key=lambda setup: setup["prior_score"], reverse=True)
     return failed
+
+
+def _attach_episode_history(
+    cards: list[dict[str, Any]],
+    failed: list[dict[str, Any]],
+    history_rows: list[dict[str, Any]],
+    timeframe: str,
+) -> None:
+    """Stamp prior-episode context (in place) onto flagged cards and failed setups.
+
+    Cards get a human-readable ``episode_history`` line (for the reviewer prompt + dashboard)
+    plus a ``prior_episode_count`` badge; failed setups get just the count. Tickers with no
+    prior episodes are left untouched (no badge, no history line — they're first-time flags)."""
+    for items, with_text in ((cards, True), (failed, False)):
+        for item in items:
+            episodes = reconstruct_episodes(history_rows, item["ticker"], timeframe)
+            prior = prior_episodes(episodes)
+            if not prior:
+                continue
+            item["prior_episode_count"] = len(prior)
+            if with_text:
+                item["episode_history"] = format_episode_history(episodes)
 
 
 def _card(

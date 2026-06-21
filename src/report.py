@@ -191,6 +191,18 @@ def append_signals(rows: list[dict[str, Any]], path: Path) -> None:
             writer.writerow({col: row.get(col, "") for col in SIGNALS_COLUMNS})
 
 
+def read_signals(path: Path) -> list[dict[str, str]]:
+    """Read ``signals.csv`` rows as dicts (empty list if missing/empty).
+
+    Used to reconstruct episode/transition history (``episodes.py``) from the append-only log
+    — read once per run, *before* the current run is appended, so it's pure prior history."""
+    path = Path(path)
+    if not path.exists() or path.stat().st_size == 0:
+        return []
+    with path.open("r", newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
 def _migrate_schema(path: Path) -> None:
     """Rewrite an existing ``signals.csv`` under the current ``SIGNALS_COLUMNS`` if its
     header differs (e.g. a schema bump added columns), back-filling new columns blank.
