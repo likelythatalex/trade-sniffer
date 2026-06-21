@@ -100,6 +100,26 @@ routes just call the existing functions.
 Keep the **scanner** static + public (gh-pages) — it's the correct design for it. Don't build
 B speculatively; name the trigger first (YAGNI).
 
+## Market context & macro monitoring (future subsystem)
+
+A layer **distinct from the per-ticker `Strategy` seam**: strategies ask "is THIS stock setting
+up?"; market context asks "what's the environment?" — computed **once per run, shared across all
+tickers**, so it is *not* a combiner strategy and can't be calibrated the per-ticker way. It is
+applied at the **composite/report layer** (annotate → later scale → maybe gate), never inside a
+per-ticker score. Design it so each macro input is "a fetch + a reading," the way a strategy is
+"a file + a config block" (a `market_data.py` fetch + a pure `market_context.py` reading).
+
+| Phase | Status | What |
+|---|---|---|
+| 1. Regime + breadth | TODO (next) | SPY trend (vs 200-dma) + **breadth** (% of the scanned universe above its 200-dma — nearly free; we already scan everyone). Emit a `MarketContext`; first **annotate + log** it (dashboard + a market column), then **scale** conviction (risk-off down-weights longs), and only maybe **gate**. |
+| 2. Macro / intermarket | TODO | Rates + rates-vol (`^TNX` / TLT / MOVE), credit risk appetite (HYG/JNK vs IEF — junk-bond spreads), intermarket ratios (IWM small-caps vs QQQ growth, value/growth, defensives/cyclicals), sector rotation/correlation. Most free via yfinance ETFs; MOVE needs a source check. |
+| 3. Cycle positioning | TODO | "Where are we in the cycle" — partly **reuse the Wyckoff engine on SPY/sector ETFs** (index-level accumulation/markup/distribution/markdown = Wyckoff applied to the market) plus the Phase-2 intermarket ratios. |
+
+Discipline: market context is shared across all tickers, so it can't be validated the per-ticker
+way — ship it as **displayed context first**, add scaling/gating only once its value shows.
+
+| Insider transactions (strategy) | IN PROGRESS | Independent, non-price signal (smart-money disclosures) — the literal version of Wyckoff's "composite operator". A new `Strategy` + a swappable `InsiderSource`, logged at weight 0 like momentum/sentiment. Data source TBD (yfinance recent = forward-only/no-key; SEC EDGAR Form 4 = historical/**backtestable**/heavier; Finnhub = structured/needs key). SPEC §6/§12. |
+
 ## Tier 5 — Future phases & architecture
 
 Bigger directions, all with design rationale in **SPEC §12** — see there for the "why". Listed
