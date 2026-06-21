@@ -27,10 +27,11 @@ from .config import Config
 # v3: added raw close/volume of the evaluated bar so forward outcomes are derivable from
 #     the log itself (survivorship-honest, no re-fetch) instead of only via replay.
 # v4: added news_sentiment_score (independent non-price signal; "" = no data, 0.0 = neutral).
-SCHEMA_VERSION = 4
+# v5: added insider_score (Form 4 net buy/sell ratio; "" = no data, 0.0 = balanced).
+SCHEMA_VERSION = 5
 SIGNALS_COLUMNS = (
     "run_ts", "ticker", "timeframe", "direction", "composite_score", "wyckoff_score",
-    "momentum_score", "news_sentiment_score",
+    "momentum_score", "news_sentiment_score", "insider_score",
     "range_score", "volume_score", "spring_score", "confirmation_score",
     "rs_vs_spy", "vol_contraction", "mtf_agree", "trend_context", "data_quality_flag",
     # Raw bar facts the feat_* are derived from — kept so the log alone yields forward outcomes.

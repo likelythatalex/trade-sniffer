@@ -525,12 +525,13 @@ holds the prior run's qualifying set per timeframe):
   (`notify.suppress_empty`, default true).
 
 ### 8.4 Signal log (`output/signals.csv`)
-- Append every evaluated ticker (even sub-threshold) per run. Schema (v4):
+- Append every evaluated ticker (even sub-threshold) per run. Schema (v5):
   `run_ts, ticker, timeframe, direction, composite_score, wyckoff_score, momentum_score,
-  news_sentiment_score, range_score, volume_score, spring_score, confirmation_score, rs_vs_spy,
-  vol_contraction, mtf_agree, trend_context, data_quality_flag, close, volume, feat_volume_ratio,
-  feat_volume_pctile, feat_spread_atr, feat_spread_pctile, feat_close_position, made_watchlist,
-  transition` where `transition` ∈ {`new`, `continuing`, `failed`, none}. ("Invalidated" maps
+  news_sentiment_score, insider_score, range_score, volume_score, spring_score,
+  confirmation_score, rs_vs_spy, vol_contraction, mtf_agree, trend_context, data_quality_flag,
+  close, volume, feat_volume_ratio, feat_volume_pctile, feat_spread_atr, feat_spread_pctile,
+  feat_close_position, made_watchlist, transition` where `transition` ∈ {`new`, `continuing`,
+  `failed`, none}. ("Invalidated" maps
   to `failed`; "still-qualifying" maps to `continuing`.) `mtf_agree` is empty/`n/a` on cold start.
 - **N6:** the `feat_*` columns log the §5A normalized features **at the evaluated (last
   closed) bar**, so calibration can later relate thresholds to outcomes.
@@ -544,6 +545,10 @@ holds the prior run's qualifying set per timeframe):
   (headlines, no lean) — that distinction must be preserved for the calibration study.
   Sentiment is **forward-only** (not replay-backtestable: free historical news doesn't exist),
   so this column accruing live is the *only* dataset that can validate the signal.
+- **v5:** `insider_score` — the insider strategy's signed composite (Form 4 net buy/sell ratio,
+  weight 0). `""` = no Form 4 buys/sells in the as-of window, `0.0` = balanced. Unlike
+  sentiment this signal **is** replay-backtestable (EDGAR keeps Form 4 history; no-lookahead
+  cutoff = the filing date).
 - Per-strategy columns are namespaced so adding strategies extends (not breaks) the schema;
   `composite_score` is the combiner output, `wyckoff_score` the strategy's own; `feat_*`
   columns are strategy-agnostic (produced by `features.py`).
@@ -725,6 +730,14 @@ can be wrong, do your own research.
     (every evaluated ticker, to avoid selection bias in calibration) and **forward-only**
     (not replay-backtestable). A future `social_sentiment` strategy (Reddit/StockTwits) would
     be a *separate*, independent signal stacked alongside it.
+  - **Insider transactions** (`strategies/insider.py`, weight 0) — an INDEPENDENT non-price
+    signal: SEC Form 4 disclosures fetched upstream (`insider_data.py`, a swappable
+    `InsiderSource`; v1 = `EdgarInsiderSource`, day-cached, fail-soft, SEC User-Agent). The
+    strategy scores a **relative** net open-market buy/sell ratio (no absolute dollar
+    threshold), down-weighting noisy insider selling (`sell_weight`), with the no-lookahead
+    cutoff on the **filing** date. Whole-universe; the literal version of Wyckoff's "composite
+    operator". Unlike sentiment it **is** replay-backtestable (EDGAR history). Future sources:
+    Finnhub; future scoring: role/size weighting, cluster bonuses.
 - **Telegram notification channel** behind the §8.3 `notify.py` interface (adds
   bot-token/chat-id config; v1 is Discord-only).
 - **Confirmation stacking**: combiner raises conviction when independent strategies agree.

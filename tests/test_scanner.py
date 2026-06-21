@@ -90,8 +90,9 @@ def _patch_fetch(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, FetchResult
     monkeypatch.setattr(scanner, "fetch_many", lambda tickers, tf, c, today=None: mapping)
     monkeypatch.setattr(scanner, "resolve_exchange", lambda _t, _c: "NYSE")
     monkeypatch.setattr(scanner, "_benchmark_close", lambda _tf, _c, _today: None)
-    # No network for news either; headlines empty -> news-sentiment abstains (weight 0 anyway).
+    # No network for news/insider either; empty -> those strategies abstain (weight 0 anyway).
     monkeypatch.setattr(scanner, "_fetch_headlines", lambda _u, _c, _today: {})
+    monkeypatch.setattr(scanner, "_fetch_insider", lambda _u, _c, _today: {})
 
 
 def test_run_timeframe_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -111,6 +112,7 @@ def test_run_timeframe_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert len(lines) == 2  # header + the one evaluated ticker
     assert "momentum_score" in lines[0]  # 2nd strategy logged (weight 0, but captured)
     assert "news_sentiment_score" in lines[0]  # 3rd strategy logged (weight 0, but captured)
+    assert "insider_score" in lines[0]  # 4th strategy logged (weight 0, but captured)
 
 
 def test_run_timeframe_skips_ticker_with_no_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -155,6 +157,7 @@ def test_run_timeframe_logs_rs_when_benchmark_present(tmp_path: Path, monkeypatc
     spy = pd.Series([float(120 - i) for i in range(len(stock))], index=stock.index)  # falling SPY
     monkeypatch.setattr(scanner, "_benchmark_close", lambda _tf, _c, _today: spy)
     monkeypatch.setattr(scanner, "_fetch_headlines", lambda _u, _c, _today: {})
+    monkeypatch.setattr(scanner, "_fetch_insider", lambda _u, _c, _today: {})
 
     scanner.run_timeframe("daily", cfg, today=date(2024, 6, 1))
 
@@ -180,6 +183,7 @@ def test_run_timeframe_uses_explicit_tickers(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setattr(scanner, "resolve_exchange", lambda _t, _c: "NYSE")
     monkeypatch.setattr(scanner, "_benchmark_close", lambda _tf, _c, _today: None)
     monkeypatch.setattr(scanner, "_fetch_headlines", lambda _u, _c, _today: {})
+    monkeypatch.setattr(scanner, "_fetch_insider", lambda _u, _c, _today: {})
 
     counts = scanner.run_timeframe("daily", cfg, today=date(2024, 6, 1), tickers=["COIN", "PLTR"])
     assert seen == ["COIN", "PLTR"]

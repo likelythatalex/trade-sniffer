@@ -27,6 +27,11 @@ CHANGE-MARK (refinement pass, aligned to SPEC §6.1/§6.4):
   • New "News Sentiment (strategy)" entry; Confirmation Stacking + Correlation Awareness
     updated to three strategies; §D table gains momentum/sentiment params. signals.csv → v4
     (news_sentiment_score). Forward-only (not backtestable). SPEC §6/§12.
+
+  Insider-transactions strategy pass (4th strategy, logged-but-inert):
+  • New "Insider Transactions (strategy)" entry; Confirmation Stacking + Correlation Awareness
+    updated to four strategies; §D table gains insider params. signals.csv → v5 (insider_score).
+    EDGAR Form 4 source; relative net-buy ratio scoring; backtestable (unlike sentiment). §6/§12.
 -->
 
 A living reference for the trading/market concepts this project uses, what they mean in
@@ -227,24 +232,24 @@ version. Think of it as a README for the *domain*, not the code.
 - **Plain meaning:** Rather than a yes/no call, rank candidates 0–100; independent signals
   agreeing should raise the score.
 - **How it's implemented here:** Per-strategy `StrategyResult` scores combined in
-  `combiner.combine` (weighted average; direction from the strongest contributor). **Three
-  strategies now exist** — Wyckoff, `strategies/momentum.py` (trend regime + ROC), and
-  `strategies/news_sentiment.py` (headline polarity, a non-price signal). Both additions ship
-  at **weight 0**: computed and logged (`momentum_score`, `news_sentiment_score` in
-  `signals.csv`) but contributing nothing to the composite until weights are calibrated from
+  `combiner.combine` (weighted average; direction from the strongest contributor). **Four
+  strategies now exist** — Wyckoff, `momentum.py` (trend regime + ROC), `news_sentiment.py`
+  (headline polarity), and `insider.py` (Form 4 net buy/sell). The three additions ship at
+  **weight 0**: computed and logged (`momentum_score`, `news_sentiment_score`, `insider_score`
+  in `signals.csv`) but contributing nothing to the composite until weights are calibrated from
   accrued data. So the rails for stacking are live; the *weighted* stacking awaits calibration.
-- **Status:** `PARTIAL` (`combiner.py` + `strategies/{momentum,news_sentiment}.py`, tested):
-  aggregation + two extra strategies done; weighting (and correlation-awareness) still
-  `FUTURE` (data-gated).
+- **Status:** `PARTIAL` (`combiner.py` + `strategies/{momentum,news_sentiment,insider}.py`,
+  tested): aggregation + three extra strategies done; weighting (and correlation-awareness)
+  still `FUTURE` (data-gated).
 
 ### Signal Correlation Awareness
 - **Plain meaning:** Stacked signals only add information if they're *independent*; three
   trend-flavored signals agreeing is one signal counted thrice.
-- **How it's implemented here:** Not yet, but the **data is now being captured**: `momentum_score`
-  and `news_sentiment_score` are logged alongside `wyckoff_score`/`composite_score` every run, so
-  pairwise correlation can be measured later. News sentiment is the most *independent* of the three
-  (non-price), so it's the strongest stacking candidate if the data bears out. Designated home for
-  the down-weighting logic is `combiner.py`.
+- **How it's implemented here:** Not yet, but the **data is now being captured**: `momentum_score`,
+  `news_sentiment_score`, and `insider_score` are logged alongside `wyckoff_score`/`composite_score`
+  every run, so pairwise correlation can be measured later. The two non-price signals (sentiment,
+  insider) are the most *independent* of price, so they're the strongest stacking candidates if the
+  data bears out. Designated home for the down-weighting logic is `combiner.py`.
 - **Status:** `FUTURE` (now data-gated, not blocked on plumbing).
 
 ### News Sentiment (strategy)
@@ -264,6 +269,26 @@ version. Think of it as a README for the *domain*, not the code.
 - **Status:** `PARTIAL` (logged-but-inert): pipeline + VADER scorer shipped + tested
   (`tests/test_sentiment.py`); LLM-via-Ollama / FinBERT scorers, richer sources, a per-stock
   relative baseline, and weight calibration are `FUTURE`. SPEC §6/§12; ROADMAP.
+
+### Insider Transactions (strategy)
+- **Plain meaning:** Are the people who know the company best (execs, directors, 10% owners)
+  *buying or selling their own stock*? Disclosed on SEC Form 4 — an information source
+  independent of both price and media.
+- **How it's implemented here:** `insider_data.py` (a swappable `InsiderSource`; v1
+  `EdgarInsiderSource` — ticker→CIK via `company_tickers.json`, Form 4s from the EDGAR
+  submissions API, transactions parsed from the ownership XML; **day-cached, fail-soft, SEC
+  User-Agent**) + `strategies/insider.py`. Scoring is a **relative, self-normalizing ratio**
+  `(buy − w·sell)/(buy + w·sell)` on transaction *value* (per the no-absolute-threshold rule),
+  where `sell_weight` (`w`) down-weights noisy insider selling (diversification/taxes/10b5-1).
+  No-lookahead cutoff is the **filing** date (public-availability), not the transaction date.
+  Whole-universe, logged as `insider_score` at **weight 0**. Thematically it's the literal
+  version of Wyckoff's "composite operator" (footprint-inference + disclosed fact).
+- **Backtestable (unlike sentiment):** EDGAR keeps Form 4 history, so the replay harness can
+  reconstruct it as-of any past filing date — it can prove itself before going live-weighted.
+- **Status:** `PARTIAL` (logged-but-inert): EDGAR source + parser + relative scoring shipped +
+  tested (`tests/test_insider.py`). The live EDGAR fetch shape is best-effort (the pure parser
+  is the tested contract); role/size weighting, cluster bonuses, Finnhub source, and weight
+  calibration are `FUTURE`. SPEC §6/§12; ROADMAP.
 
 ### Survivorship Bias
 - **Plain meaning:** Testing only on stocks that exist today overstates results (you've
@@ -408,6 +433,7 @@ guessed once and forgotten. Listed here so they're not scattered. All currently 
 | momentum `ma_window`, `roc_window` | config (per-TF) | Trend-regime MA + rate-of-change lookbacks (momentum strategy) |
 | sentiment `lookback_days`, `source`, `scorer` | config (per-TF) | News window as-of the bar + which NewsSource/SentimentScorer (news-sentiment strategy) |
 | `SENTIMENT_FULL_SCALE` | code (seed) | Mean headline compound that maps to ±100 (sentiment.py) |
+| insider `lookback_days`, `source`, `sell_weight` | config (per-TF) | Form 4 window as-of the filing date + which InsiderSource + how much selling counts vs buying (insider strategy) |
 | strategy weights | config | How strategies combine into the composite (momentum/news_sentiment seed = 0) |
 | `watchlist_threshold` | config | Score cutoff for making the report |
 

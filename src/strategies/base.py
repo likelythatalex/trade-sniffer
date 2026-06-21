@@ -90,6 +90,9 @@ class StrategyContext:
         headlines: recent ``(published_utc, title)`` news items for this ticker, fetched
             upstream (kept out of the pure strategy). ``None`` → the news-sentiment
             strategy abstains. Strategies apply their own as-of (no-lookahead) cutoff.
+        insider_transactions: recent insider (Form 4) transactions for this ticker, fetched
+            upstream. ``None`` → the insider strategy abstains. As-of cutoff uses each
+            transaction's *filing* date (its public-availability moment).
         config: the full loaded config, for anything else a strategy needs.
     """
 
@@ -99,6 +102,7 @@ class StrategyContext:
     prior_state: Any | None = None
     benchmark_close: pd.Series | None = None
     headlines: list[tuple[Any, str]] | None = None
+    insider_transactions: list[Any] | None = None
     config: Any | None = None
 
 

@@ -8,6 +8,7 @@ single-maintainer tool that is easier to read than import-time auto-discovery.
 from __future__ import annotations
 
 from .base import Strategy
+from .insider import InsiderStrategy
 from .momentum import MomentumStrategy
 from .news_sentiment import NewsSentimentStrategy
 from .wyckoff import WyckoffStrategy
@@ -17,6 +18,7 @@ _REGISTRY: dict[str, type[Strategy]] = {
     "wyckoff": WyckoffStrategy,
     "momentum": MomentumStrategy,
     "news_sentiment": NewsSentimentStrategy,
+    "insider": InsiderStrategy,
 }
 
 

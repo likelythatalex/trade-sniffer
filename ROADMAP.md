@@ -118,7 +118,7 @@ per-ticker score. Design it so each macro input is "a fetch + a reading," the wa
 Discipline: market context is shared across all tickers, so it can't be validated the per-ticker
 way — ship it as **displayed context first**, add scaling/gating only once its value shows.
 
-| Insider transactions (strategy) | IN PROGRESS | Independent, non-price signal (smart-money disclosures) — the literal version of Wyckoff's "composite operator". A new `Strategy` + a swappable `InsiderSource`, logged at weight 0 like momentum/sentiment. Data source TBD (yfinance recent = forward-only/no-key; SEC EDGAR Form 4 = historical/**backtestable**/heavier; Finnhub = structured/needs key). SPEC §6/§12. |
+| Insider transactions (strategy) | DONE | Independent, non-price signal (smart-money disclosures) — the literal version of Wyckoff's "composite operator". `strategies/insider.py` + `insider_data.py` (`EdgarInsiderSource`: ticker→CIK + Form 4 parse, day-cached, fail-soft, SEC UA). Relative net-buy/sell ratio scoring with `sell_weight`; no-lookahead on the **filing** date. Weight 0; logged as `insider_score` (schema v5). **Backtestable** (EDGAR history) — unlike sentiment. Future: Finnhub source, role/size/cluster weighting, calibration. SPEC §6/§12. |
 
 ## Tier 5 — Future phases & architecture
 

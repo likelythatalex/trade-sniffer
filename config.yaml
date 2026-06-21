@@ -57,6 +57,11 @@ strategies:
     weight: 0.0             # LOGGED BUT INERT (like momentum). Independent non-price signal;
                             # forward-only (not backtestable), so it must accrue live before
                             # calibration can weight it. SPEC §6/§12.
+  insider:
+    enabled: true
+    weight: 0.0             # LOGGED BUT INERT. Independent non-price signal (Form 4 smart-money
+                            # disclosures). UNLIKE sentiment it IS backtestable (EDGAR history),
+                            # so it can prove itself via replay before calibration. SPEC §6/§12.
 
 # D6: Wyckoff parameters. `defaults` apply to every timeframe; `per_timeframe`
 # overrides are REQUIRED for weekly so a 60-*week* range isn't silently applied.
@@ -128,6 +133,21 @@ sentiment:
     daily: {}                   # uses defaults
     weekly:
       lookback_days: 30         # a weekly bar spans more time, so look back further
+
+# §6/§12 Insider-transaction strategy — an INDEPENDENT, non-price signal (SEC Form 4 smart-money
+# disclosures; the literal version of Wyckoff's "composite operator"). Backtestable (EDGAR keeps
+# history; no-lookahead cutoff = the FILING date). Scored as a relative net-buy ratio (no absolute
+# dollar threshold); insider SELLING is noisy, so `sell_weight` down-weights it. [TUNABLE].
+insider:
+  defaults:
+    source: edgar               # InsiderSource: edgar (SEC, free, historical). Set EDGAR_USER_AGENT
+                                # to add a contact to the request header (SEC etiquette).
+    lookback_days: 90           # Form 4 window as-of the bar (insider filings are sparse)
+    sell_weight: 0.5            # how much open-market SELLS count vs BUYS (selling is noisier)
+  per_timeframe:
+    daily: {}                   # uses defaults
+    weekly:
+      lookback_days: 180        # a weekly bar spans more time; widen the sparse-signal window
 
 scoring:
   watchlist_threshold: 70       # 0-100 final composite; >= this gets written out

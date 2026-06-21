@@ -160,14 +160,21 @@ All thresholds, weights, lookbacks, and enabled strategies live in [config.yaml]
 
 ### Strategies
 
-Wyckoff is the only weighted strategy. Two more run **at weight 0 — logged but inert**: they
+Wyckoff is the only weighted strategy. Three more run **at weight 0 — logged but inert**: they
 compute a score every run (captured in `signals.csv` for the future correlation/calibration
-study) but contribute nothing to the composite until calibrated from accrued data. They are
-**momentum** (trend regime + rate-of-change) and **news sentiment** (recent headline polarity
-via yfinance + a VADER lexicon — an independent, non-price signal; whole-universe, no-lookahead,
-day-cached, fail-soft). News sentiment is **forward-only**: free historical news doesn't exist,
-so it can't be backtested — it must accrue live. Adding a strategy is "a file in
-`src/strategies/` + a `config.yaml` block".
+study) but contribute nothing to the composite until calibrated from accrued data:
+
+- **momentum** — trend regime + rate-of-change.
+- **news sentiment** — recent headline polarity (yfinance + a VADER lexicon). Independent and
+  non-price, but **forward-only**: free historical news doesn't exist, so it can't be
+  backtested — it must accrue live.
+- **insider** — net open-market insider buying vs selling from **SEC Form 4** filings
+  (EDGAR). Independent and non-price, and — unlike sentiment — **backtestable** (EDGAR keeps
+  history; no-lookahead uses the filing date). Set `EDGAR_USER_AGENT` to add a contact to the
+  SEC request header.
+
+All three are whole-universe, no-lookahead, day-cached, and fail-soft. Adding a strategy is
+"a file in `src/strategies/` + a `config.yaml` block".
 
 ## Scheduling (GitHub Actions)
 

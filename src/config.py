@@ -122,6 +122,17 @@ class SentimentConfig:
 
 
 @dataclass(frozen=True)
+class InsiderConfig:
+    """Insider-transaction strategy params (SPEC §6, §12) — same defaults+per_timeframe shape.
+
+    Holds ``source`` (which `InsiderSource`), ``lookback_days`` (Form 4 window as-of the bar's
+    filing-date cutoff), and ``sell_weight`` (how much noisy insider selling counts vs buying)."""
+
+    defaults: dict[str, Any]
+    per_timeframe: dict[str, dict[str, Any]]
+
+
+@dataclass(frozen=True)
 class ScoringConfig:
     watchlist_threshold: float
 
@@ -193,6 +204,7 @@ class Config:
     wyckoff: WyckoffConfig
     momentum: MomentumConfig
     sentiment: SentimentConfig
+    insider: InsiderConfig
     scoring: ScoringConfig
     trade_plan: TradePlanConfig
     review: ReviewConfig
@@ -247,6 +259,8 @@ def resolve_strategy_params(config: Config, name: str, timeframe: str) -> dict[s
         return _merge_timeframe(config.momentum.defaults, config.momentum.per_timeframe, timeframe)
     if name == "news_sentiment":
         return _merge_timeframe(config.sentiment.defaults, config.sentiment.per_timeframe, timeframe)
+    if name == "insider":
+        return _merge_timeframe(config.insider.defaults, config.insider.per_timeframe, timeframe)
     raise ConfigError(f"No params resolver for strategy '{name}'.")
 
 
@@ -285,6 +299,7 @@ def _build_config(raw: dict) -> Config:
     wyckoff = _require(raw, "wyckoff", "")
     momentum = _require(raw, "momentum", "")
     sentiment = _require(raw, "sentiment", "")
+    insider = _require(raw, "insider", "")
     scoring = _require(raw, "scoring", "")
     trade_plan = _require(raw, "trade_plan", "")
     review = _require(raw, "review", "")
@@ -347,6 +362,13 @@ def _build_config(raw: dict) -> Config:
             per_timeframe={
                 tf: dict(overrides or {})
                 for tf, overrides in _require(sentiment, "per_timeframe", "sentiment.").items()
+            },
+        ),
+        insider=InsiderConfig(
+            defaults=dict(_require(insider, "defaults", "insider.")),
+            per_timeframe={
+                tf: dict(overrides or {})
+                for tf, overrides in _require(insider, "per_timeframe", "insider.").items()
             },
         ),
         scoring=ScoringConfig(
@@ -420,6 +442,10 @@ def _validate(config: Config) -> None:
     # (build_news_source / get_scorer fail loud on an unknown name).
     if int(config.sentiment.defaults.get("lookback_days", 0)) <= 0:
         raise ConfigError("sentiment.defaults.lookback_days must be a positive integer.")
+
+    # Insider needs a positive look-back; source validated lazily (build_insider_source).
+    if int(config.insider.defaults.get("lookback_days", 0)) <= 0:
+        raise ConfigError("insider.defaults.lookback_days must be a positive integer.")
 
     # v1 ships Discord only.
     if config.output.notify.channel != "discord":

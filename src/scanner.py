@@ -42,6 +42,7 @@ from .report import (
     write_index_page,
     write_tv_import_file,
 )
+from .insider_data import build_insider_source
 from .sentiment_data import build_news_source
 from .state import TimeframeState, classify_transitions, load_state, mtf_direction, save_state
 from .strategies.base import Levels, StrategyContext, StrategyResult
@@ -100,6 +101,8 @@ def run_timeframe(
     benchmark = _benchmark_close(timeframe, config, today)  # SPY for RS; None -> RS abstains
     # Whole-universe headlines for news-sentiment (only when that strategy is enabled).
     headlines_all = _fetch_headlines(universe, config, today) if "news_sentiment" in strategies else {}
+    # Whole-universe insider (Form 4) transactions, same gating + rationale.
+    insider_all = _fetch_insider(universe, config, today) if "insider" in strategies else {}
 
     for ticker in universe:
         counts["scanned"] += 1
@@ -133,7 +136,8 @@ def run_timeframe(
                     StrategyContext(
                         features=features, params=strategy_params[name], timeframe=timeframe,
                         prior_state=other_direction, benchmark_close=benchmark,
-                        headlines=headlines_all.get(ticker), config=config,
+                        headlines=headlines_all.get(ticker),
+                        insider_transactions=insider_all.get(ticker), config=config,
                     ),
                 )
                 for name, strat in strategies.items()
@@ -145,7 +149,8 @@ def run_timeframe(
                 _signals_row(run_ts, ticker, timeframe, composite, results.get("wyckoff"),
                              features, cleaned, quality, made_watchlist, other_direction,
                              momentum=results.get("momentum"),
-                             news_sentiment=results.get("news_sentiment"))
+                             news_sentiment=results.get("news_sentiment"),
+                             insider=results.get("insider"))
             )
             if made_watchlist and composite.direction != "none":
                 counts["flagged"] += 1
@@ -241,6 +246,20 @@ def _fetch_headlines(
         return source.fetch(universe, today or date.today())
     except Exception:
         logger.warning("news fetch failed; news-sentiment abstains this run")
+        return {}
+
+
+def _fetch_insider(
+    universe: list[str], config: Config, today: date | None
+) -> dict[str, list[Any]]:
+    """Whole-universe insider (Form 4) transactions for the insider strategy, fetched once per
+    run (day-cached). Same rationale as news: every evaluated name (no selection bias) and
+    fail-soft (`{}` → strategy abstains) so it never aborts a scan (SPEC §10)."""
+    try:
+        source = build_insider_source(config.insider.defaults["source"], Path(config.data.cache_dir))
+        return source.fetch(universe, today or date.today())
+    except Exception:
+        logger.warning("insider fetch failed; insider strategy abstains this run")
         return {}
 
 
@@ -396,6 +415,7 @@ def _signals_row(
     mtf_direction: str | None = None,
     momentum: StrategyResult | None = None,
     news_sentiment: StrategyResult | None = None,
+    insider: StrategyResult | None = None,
 ) -> dict[str, Any]:
     """Build one signals.csv row (schema ``SIGNALS_COLUMNS``) for an evaluated ticker.
 
@@ -418,6 +438,8 @@ def _signals_row(
         "momentum_score": _round(momentum.metadata.get("signed")) if momentum else "",
         # Signed news-sentiment composite; "" = no data (abstained), 0.0 = neutral. Forward-only.
         "news_sentiment_score": _round(news_sentiment.metadata.get("signed")) if news_sentiment else "",
+        # Signed insider composite (Form 4 net buy/sell ratio); "" = no data, 0.0 = balanced.
+        "insider_score": _round(insider.metadata.get("signed")) if insider else "",
         "range_score": _round(sub.get("range_structure")),
         "volume_score": _round(sub.get("volume_behavior")),
         "spring_score": _round(sub.get("spring_upthrust")),
