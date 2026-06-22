@@ -651,7 +651,10 @@ private-journal split.
   forward price path bar-by-bar — which level hit first (stop vs target), realized R, MFE/MAE
   — surfaced by `journal report`. This is distinct from `backtest/outcomes.py` (close-to-close
   forward returns for the score's IC); a trade plan is path-dependent, so it's its own module,
-  **shared** with the future policy-sweep simulator (Tier 3). Outcomes are *derived* (recomputed
+  **shared** with the policy-sweep simulator (`backtest/plan_sim.py`, Tier 3 — now built: replays
+  history, runs `plan_trade`→`evaluate_outcome` per `TradePlanConfig`, and sweeps configs to
+  compare the realized-R distribution; survivorship-biased + in-sample, so it ranks policies, it
+  doesn't bless one). Outcomes are *derived* (recomputed
   from prices), never stored in `journal.csv` — the journal stays pure user input. The journal
   is the *real-trade* dataset alongside `signals.csv`.
 - **Post-trade agent review (private):** reuse the `Reviewer` ABC (§8.5) with a *reflection*

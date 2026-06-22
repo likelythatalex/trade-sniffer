@@ -351,6 +351,27 @@ version. Think of it as a README for the *domain*, not the code.
 - **Status:** `IMPLEMENTED` (tooling) / data-gated (results) (`backtest/event_study.py`, tested
   in `tests/test_event_study.py`). SPEC §12 ("Backtesting harness"); ROADMAP.
 
+### Plan-Outcome Simulator / Policy Sweep
+- **Plain meaning:** Separate from "is the *score* informative?" (the IC harness), this asks "is
+  the *planner's policy* any good, and which settings are best?" — e.g. does a tight `capped`
+  stop beat a wide `structural` one on realized reward:risk?
+- **How it's implemented here:** `backtest/plan_sim.py` (`python -m src.backtest.plan_sim`).
+  `collect_trials` replays history once — via the shared `replay.score_history` generator
+  (extracted so the IC harness and the simulator share one causal-replay core) — to capture each
+  directional signal's structural `Levels` + the forward OHLC bars. `simulate` runs `plan_trade`
+  under a given `TradePlanConfig`, models the **breakout trigger** (entry = the range-edge break,
+  so a non-triggering plan is `no_fill`, never a fabricated loss), then resolves the
+  stop-vs-target race with the path-dependent `trade_outcome.evaluate_outcome` → realized R.
+  `sweep` runs the `stop_method`×`max_stop_pct` grid over the *same* trials (cheap, because
+  `plan_trade` is pure-on-config) and ranks policies by expectancy-R. `--oos-frac` holds out a
+  date-tail (anti-overfit check); `--step` thins overlapping samples.
+- **Calibration, not a verdict:** replay is survivorship-biased and a full-sample sweep is
+  in-sample, so the report says to prefer robust **plateaus** over single peaks and to use the
+  live private journal for *absolute* expectancy. It ranks policies; it doesn't bless one.
+- **Status:** `IMPLEMENTED` (`backtest/plan_sim.py` + the `replay.score_history` refactor, tested
+  in `tests/test_plan_sim.py`). The path-dependent evaluator it reuses is `trade_outcome.py`
+  (SPEC §8A.2). SPEC §12; ROADMAP.
+
 ### Lookahead Bias
 - **Plain meaning:** Accidentally using information not available at decision time, making
   results unrealistically good.

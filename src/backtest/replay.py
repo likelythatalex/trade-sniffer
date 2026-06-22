@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from typing import Iterator
 
 import pandas as pd
 
@@ -26,7 +27,7 @@ from ..config import Config, resolve_strategy_params, scoring_window
 from ..data import fetch_many, fetch_spy
 from ..data_quality import clean
 from ..features import compute_features
-from ..strategies.base import StrategyContext
+from ..strategies.base import StrategyContext, StrategyResult
 from ..strategies.registry import get_strategy
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,33 @@ def replay_history(
     are skipped (fail-soft).
     """
     today = today or date.today()
+    fetched = fetch_many(tickers, timeframe, config, today=today)
+    benchmark = benchmark_close(timeframe, config, today)
+
+    prices: dict[str, pd.Series] = {}
+    rows: list[dict] = []
+    for ticker, i, cleaned, composite in score_history(fetched, benchmark, timeframe, config, step):
+        prices[ticker] = cleaned["close"]
+        rows.append(_signal_row(ticker, cleaned.index[i], composite))
+
+    return pd.DataFrame(rows), prices, benchmark
+
+
+def score_history(
+    fetched: dict[str, object],
+    benchmark: pd.Series | None,
+    timeframe: str,
+    config: Config,
+    step: int = 1,
+) -> Iterator[tuple[str, int, pd.DataFrame, StrategyResult]]:
+    """The shared causal-replay core: yield ``(ticker, i, cleaned, composite)`` for each
+    as-of bar, where ``i`` is the bar's integer position in the cleaned frame.
+
+    Both consumers slice this differently: the IC harness keeps ``cleaned["close"]`` + the
+    composite score; the plan-outcome simulator keeps ``composite.levels`` + the forward bars
+    ``cleaned.iloc[i+1:]``. Causal by construction (features/strategies use trailing windows,
+    so scoring on ``cleaned.iloc[:i+1]`` is lookahead-free). Quality-excluded tickers are
+    skipped. MTF agreement is not replayed (``prior_state=None``)."""
     enabled = {name: spec for name, spec in config.strategies.items() if spec.enabled}
     strategies = {name: get_strategy(name) for name in enabled}
     weights = {name: spec.weight for name, spec in enabled.items()}
@@ -58,39 +86,26 @@ def replay_history(
     strategy_params = {name: resolve_strategy_params(config, name, timeframe) for name in strategies}
     start_offset = scoring_window(config, timeframe)  # first bar with full lookback windows
 
-    fetched = fetch_many(tickers, timeframe, config, today=today)
-    benchmark = _benchmark_close(timeframe, config, today)
-
-    prices: dict[str, pd.Series] = {}
-    rows: list[dict] = []
     for processed, (ticker, result) in enumerate(fetched.items(), start=1):
         cleaned, quality = clean(result.df, result.corporate_actions, config.data_quality, result.expected_sessions)
         if quality.excluded:
             logger.info("replay skip %s: %s", ticker, quality.reason)
             continue
         features = compute_features(cleaned, baseline_window)
-        prices[ticker] = cleaned["close"]
-
         for i in range(start_offset, len(cleaned), step):
-            df_asof = cleaned.iloc[: i + 1]
-            features_asof = features.iloc[: i + 1]
             results = {
                 name: strat.evaluate(
-                    df_asof,
+                    cleaned.iloc[: i + 1],
                     StrategyContext(
-                        features=features_asof, params=strategy_params[name], timeframe=timeframe,
+                        features=features.iloc[: i + 1], params=strategy_params[name], timeframe=timeframe,
                         prior_state=None, benchmark_close=benchmark, config=config,  # MTF not replayed
                     ),
                 )
                 for name, strat in strategies.items()
             }
-            composite = combine(results, weights)
-            rows.append(_signal_row(ticker, cleaned.index[i], composite))
-
+            yield ticker, i, cleaned, combine(results, weights)
         if processed % 50 == 0:
             logger.info("replay progress: %d/%d tickers", processed, len(fetched))
-
-    return pd.DataFrame(rows), prices, benchmark
 
 
 def _signal_row(ticker: str, when, composite) -> dict:
@@ -108,8 +123,11 @@ def _signal_row(ticker: str, when, composite) -> dict:
     return row
 
 
-def _benchmark_close(timeframe: str, config: Config, today: date) -> pd.Series | None:
-    """SPY close for the RS input + excess-return baseline; None (abstain) on failure."""
+def benchmark_close(timeframe: str, config: Config, today: date) -> pd.Series | None:
+    """SPY close for the RS input + excess-return baseline; None (abstain) on failure.
+
+    Shared by the IC harness and the plan-outcome simulator (both score with the same
+    benchmark the production pipeline uses, so the signals they evaluate match)."""
     try:
         return fetch_spy(timeframe, config, today=today)["close"]
     except Exception:

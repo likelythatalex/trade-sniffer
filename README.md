@@ -107,6 +107,25 @@ counterpart to replay) and needs no network. Two honest limits: excursions are *
 **data-gated** — meaningful numbers need accrued fail→revive history. Writes to
 `backtest_results/` (gitignored).
 
+### Plan-outcome simulator + policy sweep (tuning the planner)
+
+Asks: **which planner *policy* would have produced the best trades?** It replays history once
+to collect each directional signal's structural levels + forward bars, then runs the suggested
+plan (`plan_trade`) through a path-dependent stop-vs-target evaluator (`trade_outcome`) to a
+realized **R** per trade — and **sweeps** the config (`stop_method` × `max_stop_pct`) to compare
+the R distributions side by side.
+
+```bash
+python -m src.backtest.plan_sim --timeframe daily --step 5 --oos-frac 0.3
+python -m src.backtest.plan_sim --stop-methods capped,structural,atr --max-stop-pcts 5,8,12
+```
+
+It models the **breakout trigger** (a plan whose entry never triggers is `no_fill`, not a fake
+loss). **Treat it as calibration, not a verdict:** replay is survivorship-biased and a
+full-sample sweep is in-sample — so prefer a robust **plateau** of configs over the single top
+row, use `--oos-frac` to hold out a date-tail as an anti-overfit check, and trust the live
+private journal for *absolute* expectancy. Writes to `backtest_results/` (gitignored).
+
 ## Agent reviewer (optional, off by default)
 
 A proactive, objective due-diligence pass on **newly-flagged** setups: at scan time it asks an
