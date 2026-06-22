@@ -32,6 +32,9 @@ _ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 _ANTHROPIC_VERSION = "2023-06-01"
 _VERDICTS = ("aligned", "mixed", "skeptical")
 _OLLAMA_TIMEOUT = 120  # local inference is slower than the API; give it room
+_OPENAI_TIMEOUT = 60   # default per-request seconds for the OpenAI-compatible (DeepSeek) client
+_OPENAI_RETRIES = 2    # default retries on transient errors for that client
+_RETRYABLE_STATUS = (429, 500, 502, 503, 504)
 
 SYSTEM_PROMPT = (
     "You are a skeptical due-diligence reviewer for a Wyckoff accumulation/distribution "
@@ -147,30 +150,134 @@ class OllamaReviewer(Reviewer):
         return {"text": text, "verdict": parse_verdict(text, self._verdicts)}
 
 
+class OpenAICompatibleReviewer(Reviewer):
+    """Calls any OpenAI **chat-completions**-compatible endpoint over REST (no SDK).
+
+    Serves DeepSeek (``https://api.deepseek.com``) and any other OpenAI-wire endpoint — a
+    different base URL + key + model, same client. (NOTE: the repo's ``OllamaReviewer`` uses
+    Ollama's *native* ``/api/chat``, which is NOT this wire format, so this is its own client.)
+    Adds a bounded timeout + a few retries on transient errors; a hard failure raises, which the
+    callers already fail-soft. Put the stable rubric/docs in ``system_prompt`` and the variable
+    payload in the user prompt so providers that cache by prefix (DeepSeek) get cache hits."""
+
+    def __init__(
+        self,
+        model: str,
+        api_key: str,
+        base_url: str,
+        max_tokens: int,
+        system_prompt: str = SYSTEM_PROMPT,
+        verdicts: tuple[str, ...] = _VERDICTS,
+        timeout: int = _OPENAI_TIMEOUT,
+        retries: int = _OPENAI_RETRIES,
+    ) -> None:
+        self._model = model
+        self._api_key = api_key
+        self._base_url = base_url.rstrip("/")
+        self._max_tokens = max_tokens
+        self._system_prompt = system_prompt
+        self._verdicts = verdicts
+        self._timeout = timeout
+        self._retries = retries
+
+    def review(self, prompt: str) -> dict[str, str]:
+        response = _post_with_retries(
+            f"{self._base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {self._api_key}", "content-type": "application/json"},
+            payload={
+                "model": self._model,
+                "max_tokens": self._max_tokens,
+                "temperature": 0.4,
+                "messages": [
+                    {"role": "system", "content": self._system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+            },
+            timeout=self._timeout,
+            retries=self._retries,
+        )
+        text = response.json()["choices"][0]["message"]["content"].strip()
+        return {"text": text, "verdict": parse_verdict(text, self._verdicts)}
+
+
+def _post_with_retries(url: str, *, headers: dict, payload: dict, timeout: int, retries: int):
+    """POST with a few retries on transient errors (timeouts, 429, 5xx), exponential backoff.
+    A non-transient HTTP error or exhausted retries raises (callers fail-soft)."""
+    import time
+
+    import requests  # lazy: only when a reviewer actually runs
+
+    last_exc: Exception | None = None
+    for attempt in range(retries + 1):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            if response.status_code in _RETRYABLE_STATUS and attempt < retries:
+                logger.warning("review HTTP %s; retrying (%d/%d)", response.status_code, attempt + 1, retries)
+                time.sleep(0.5 * 2**attempt)
+                continue
+            response.raise_for_status()
+            return response
+        except requests.RequestException as exc:  # network/timeout — retry then give up
+            last_exc = exc
+            if attempt < retries:
+                logger.warning("review request failed (%s); retrying (%d/%d)", exc, attempt + 1, retries)
+                time.sleep(0.5 * 2**attempt)
+                continue
+            raise
+    raise last_exc  # pragma: no cover - loop either returns or raises above
+
+
+def build_provider(
+    provider: str,
+    model: str,
+    api_key_env: str,
+    base_url: str,
+    max_tokens: int,
+    *,
+    system_prompt: str = SYSTEM_PROMPT,
+    verdicts: tuple[str, ...] = _VERDICTS,
+    timeout: int = _OPENAI_TIMEOUT,
+    retries: int = _OPENAI_RETRIES,
+) -> Reviewer | None:
+    """The single provider → client map, shared by the in-pipeline reviewer and the standalone
+    review CLIs. Returns ``None`` (caller skips, fail-soft) when a key is required but unset, or
+    the provider is unknown. Ollama needs no key; Anthropic + DeepSeek read ``api_key_env``."""
+    provider = provider.strip().lower()
+    if provider == "ollama":
+        return OllamaReviewer(model, base_url, max_tokens, system_prompt, verdicts)
+    if provider == "anthropic":
+        api_key = os.environ.get(api_key_env)
+        if not api_key:
+            logger.info("review skipped: %s not set", api_key_env)
+            return None
+        return AnthropicReviewer(model, api_key, max_tokens, system_prompt, verdicts)
+    if provider == "deepseek":
+        api_key = os.environ.get(api_key_env)
+        if not api_key:
+            logger.info("review skipped: %s not set", api_key_env)
+            return None
+        return OpenAICompatibleReviewer(model, api_key, base_url, max_tokens, system_prompt, verdicts, timeout, retries)
+
+    logger.warning("review skipped: unknown provider %r", provider)
+    return None
+
+
 def build_reviewer(
     config: ReviewConfig,
     system_prompt: str = SYSTEM_PROMPT,
     verdicts: tuple[str, ...] = _VERDICTS,
 ) -> Reviewer | None:
-    """Construct the configured reviewer (Anthropic or local Ollama), honoring env overrides
-    so ONE committed config can be Anthropic in CI and Ollama locally (12-factor):
-    ``REVIEW_PROVIDER`` / ``REVIEW_MODEL`` / ``OLLAMA_BASE_URL``. Returns ``None`` when it
-    can't be built (Anthropic with no key, or an unknown provider) — the caller then skips."""
-    provider = os.environ.get("REVIEW_PROVIDER", config.provider).strip().lower()
+    """Construct the in-pipeline reviewer from ``config.review`` + env overrides, so ONE committed
+    config can be Anthropic in CI and Ollama/DeepSeek locally (12-factor): ``REVIEW_PROVIDER`` /
+    ``REVIEW_MODEL`` / ``REVIEW_BASE_URL`` (or legacy ``OLLAMA_BASE_URL``). Delegates the actual
+    client construction to ``build_provider``."""
+    provider = os.environ.get("REVIEW_PROVIDER", config.provider)
     model = os.environ.get("REVIEW_MODEL", config.model)
-
-    if provider == "ollama":
-        base_url = os.environ.get("OLLAMA_BASE_URL") or config.base_url
-        return OllamaReviewer(model, base_url, config.max_tokens, system_prompt, verdicts)
-    if provider == "anthropic":
-        api_key = os.environ.get(config.api_key_env)
-        if not api_key:
-            logger.info("review skipped: %s not set", config.api_key_env)
-            return None
-        return AnthropicReviewer(model, api_key, config.max_tokens, system_prompt, verdicts)
-
-    logger.warning("review skipped: unknown provider %r", provider)
-    return None
+    base_url = os.environ.get("REVIEW_BASE_URL") or os.environ.get("OLLAMA_BASE_URL") or config.base_url
+    return build_provider(
+        provider, model, config.api_key_env, base_url, config.max_tokens,
+        system_prompt=system_prompt, verdicts=verdicts,
+    )
 
 
 def make_reviewer(config: ReviewConfig) -> Reviewer | None:

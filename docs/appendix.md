@@ -488,10 +488,13 @@ version. Think of it as a README for the *domain*, not the code.
 - **How it's implemented here:** `review.review_candidates` runs at scan time on NEWLY-flagged
   cards, builds a compact evidence prompt from the normalized card (strategy-agnostic), and a
   pluggable `Reviewer` returns a `Verdict: aligned/mixed/skeptical` + assessment + concerns.
-  Two providers (REST via `requests`, no SDK): **`AnthropicReviewer`** (cloud) and
-  **`OllamaReviewer`** (local GPU); `build_reviewer` selects by `review.provider` with env
-  overrides (`REVIEW_PROVIDER`/`REVIEW_MODEL`/`OLLAMA_BASE_URL`) — Anthropic in CI, optional
-  local Ollama for free + private runs. Baked into the dashboard (text only, never
+  Three providers (REST via `requests`, no SDK): **`AnthropicReviewer`** (cloud),
+  **`OllamaReviewer`** (local GPU, Ollama's *native* `/api/chat`), and
+  **`OpenAICompatibleReviewer`** (DeepSeek / any OpenAI-wire `/chat/completions` endpoint, with a
+  bounded timeout + transient-error retries); the shared `build_provider` maps `provider → client`,
+  and `build_reviewer` selects by `review.provider` with env overrides
+  (`REVIEW_PROVIDER`/`REVIEW_MODEL`/`REVIEW_BASE_URL`, legacy `OLLAMA_BASE_URL`) — Anthropic in CI,
+  optional local Ollama or cloud DeepSeek otherwise. Baked into the dashboard (text only, never
   HTML-injected). The same interface drives the **private post-trade journal reflection**
   (`journal review`, a different rubric). Never gives trading advice. Cost-bounded: off by
   default, NEW-only, per-run cap, cheap model, bounded output, cached; fail-soft. The prompt
@@ -501,6 +504,25 @@ version. Think of it as a README for the *domain*, not the code.
 - **Status:** `IMPLEMENTED` (v1, bounded) (`review.py` + `scanner.py` + `journal.py`, tested in
   `tests/test_review.py`). `FUTURE`: tool-using (deeper) agency; multimodal review of the
   rendered chart image.
+
+### Standalone Review CLIs (DeepSeek code + outcome)
+- **Plain meaning:** Two on-demand "second opinion" tools that are *not* part of the scan: one
+  reviews a **git diff** (is the new code sound + on-convention?), the other reviews the **accrued
+  logs** (is the system actually performing?). Separate from the in-dashboard signal reviewer.
+- **How it's implemented here:** `src/reviewers/` (`code.py`, `outcome.py`, `common.py`), run via
+  `python -m src.reviewers.code` / `…outcome`. They reuse the provider layer
+  (`review.build_provider` → `OpenAICompatibleReviewer` for DeepSeek) and write markdown to
+  **`review_out/`** (gitignored) — **read-only**, never editing files or placing trades. Config is
+  the `reviewers:` block (a shared `deepseek` client + per-tool `code`/`outcome` model tiers —
+  `deepseek-v4-flash`/`deepseek-v4-pro`, `[VERIFY]`). Rubrics are version-controlled in
+  `prompts/*.md` (editable without code). Bounds mirror the in-pipeline reviewer: `max_input_tokens`
+  truncation of the diff/data (logged), per-request `timeout` + `retries`, fail-soft (no key / API
+  error → review omitted, run never crashes), and a stable system prefix (rubric + pinned docs) for
+  DeepSeek prompt-cache hits. The outcome reviewer is **analysis-only — never trading advice**.
+- **Off by default / no surprise spend:** they run only when invoked; nothing scheduled spends
+  unless you add the one-line CI step, and a missing `DEEPSEEK_API_KEY` simply skips.
+- **Status:** `IMPLEMENTED` (`src/reviewers/` + the `review.build_provider`/`OpenAICompatibleReviewer`
+  additions, tested in `tests/test_reviewers.py` + `tests/test_review.py`; network mocked). SPEC §8.5.
 
 ---
 

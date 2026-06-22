@@ -32,6 +32,9 @@ data_cache/
 # --- Backtest results (offline analysis tool; not part of the published scan) ---
 backtest_results/
 
+# --- Standalone review CLI output (code/outcome reviews; on-demand, not published) ---
+review_out/
+
 # --- Private trade journal (LOCAL ONLY — never committed, never published) ---
 # The repo and gh-pages are PUBLIC; intended trades and their post-trade reviews stay on
 # your machine. The journal runs locally/manually only, never in CI. See SPEC §8A.2.

@@ -140,10 +140,11 @@ re-spend. No key or a failed call simply omits the review.
 
 ### Local LLM via Ollama (optional, free + private)
 
-The reviewer provider is pluggable: `anthropic` (cloud) or `ollama` (a local GPU). The committed
-config stays `anthropic` so the **scheduled CI review** is automated and reachable (a cloud runner
-can't reach a home GPU). For **local** runs you flip to Ollama with env vars — no file edits, no
-API key, and **trade data never leaves your machine** (the big win for the private `journal review`):
+The reviewer provider is pluggable: `anthropic` (cloud), `ollama` (a local GPU), or `deepseek`
+(an OpenAI-wire-compatible cloud API). The committed config stays `anthropic` so the **scheduled
+CI review** is automated and reachable (a cloud runner can't reach a home GPU). For **local** runs
+you flip to Ollama with env vars — no file edits, no API key, and **trade data never leaves your
+machine** (the big win for the private `journal review`):
 
 ```bash
 # one-time: pull a small instruct model (7-8B fits a 10-12GB card comfortably)
@@ -156,6 +157,44 @@ python -m src.journal review            # now runs on your GPU, fully private
 A down/unreachable server just fail-softs (the review is omitted). Maintaining Ollama (install,
 `ollama pull`, drivers, keeping it up) is **local infrastructure — out of scope for this repo**;
 the repo only speaks HTTP to it.
+
+## Standalone review CLIs (DeepSeek)
+
+Two **separate**, on-demand report-writers (distinct from the in-dashboard signal reviewer above)
+— configured under `reviewers:` in [config.yaml](config.yaml), powered by DeepSeek
+(OpenAI-wire-compatible, served by the same hand-rolled client — no SDK). Both are **read-only**:
+they write markdown to `review_out/` (gitignored) and **never edit files or place trades**. They
+run only when invoked (no scheduled spend unless you add the CI step), and **fail soft** — a
+missing `DEEPSEEK_API_KEY`, unknown provider, or API error omits the review without crashing.
+
+- **Code review** (cheap tier, `deepseek-v4-flash`): reviews a git diff against the repo's
+  conventions and writes findings.
+- **Outcome review** (stronger tier, `deepseek-v4-pro`): reads the accrued logs (`signals.csv`,
+  `market.csv`, the optional private `journal.csv`, any `backtest_results/`) and reports on how
+  the *system* is performing — analysis only, **never trading advice**.
+
+```bash
+# code review of the last commit (override the range as needed)
+DEEPSEEK_API_KEY=sk-... python -m src.reviewers.code --diff-range HEAD~1..HEAD
+# outcome review over whatever has accrued in output/
+DEEPSEEK_API_KEY=sk-... python -m src.reviewers.outcome
+```
+
+Cost/reliability controls mirror the in-pipeline reviewer: the diff/data payload is **truncated**
+to `max_input_tokens` (logged), each request has a **timeout + retries** on transient errors, and
+the stable rubric + pinned docs sit in a fixed system prefix so DeepSeek's **prompt caching** makes
+repeat runs cheap. The rubrics live in version-controlled [prompts/](prompts/) — edit them without
+touching code. Provider/model are overridable via `REVIEW_PROVIDER` / `REVIEW_MODEL` /
+`REVIEW_BASE_URL`. To run the outcome review on a schedule, add this one step to a workflow (key
+from a GitHub Secret — not enabled by default):
+
+```yaml
+- run: python -m src.reviewers.outcome
+  env: { DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }} }
+```
+
+> Model IDs `deepseek-v4-flash` / `deepseek-v4-pro` are committed as defaults but marked
+> `[VERIFY]` in config — confirm the current DeepSeek model IDs for your account.
 
 ## Private trade journal (local-only)
 

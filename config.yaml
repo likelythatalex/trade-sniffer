@@ -199,6 +199,31 @@ review:
                                 # 1500 lets thinking models finish; barely affects cloud cost.
   max_reviews_per_run: 3        # HARD cap on LLM calls per run (top-N NEW candidates by score)
   only_new: true                # review only NEW transitions; continuing setups reuse the cache
+  # provider may also be `deepseek` (OpenAI-wire-compatible): set base_url=https://api.deepseek.com
+  # and api_key_env=DEEPSEEK_API_KEY. env REVIEW_BASE_URL overrides base_url at runtime.
+
+# Standalone, on-demand/CI review CLIs — SEPARATE from the in-dashboard signal reviewer above.
+# They write markdown to review_out/ (gitignored), are READ-ONLY (never edit files / place trades),
+# and only run when invoked (no scheduled spend unless you add the CI step). DeepSeek is
+# OpenAI-wire-compatible, served by one hand-rolled client (no SDK). Real key only from env.
+reviewers:
+  deepseek:
+    base_url: https://api.deepseek.com   # OpenAI-compatible endpoint (no trailing /v1 needed)
+    api_key_env: DEEPSEEK_API_KEY        # key from env/GitHub Secret — NEVER committed
+  code:                                  # code-diff review (cheap tier)
+    provider: deepseek
+    model: deepseek-v4-flash             # [VERIFY] confirm current DeepSeek model id
+    max_input_tokens: 60000              # truncate the diff before sending (logged notice)
+    max_tokens: 4000                     # output ceiling
+    timeout: 120                         # per-request seconds
+    retries: 2                           # retries on transient (timeout/5xx/429) errors
+  outcome:                               # outcome review over accrued data (stronger tier)
+    provider: deepseek
+    model: deepseek-v4-pro               # [VERIFY] confirm current DeepSeek model id
+    max_input_tokens: 80000
+    max_tokens: 6000
+    timeout: 180
+    retries: 2
 
 output:
   dir: output

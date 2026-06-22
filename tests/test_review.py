@@ -10,11 +10,16 @@ import dataclasses
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 from src import config as config_module
 from src.review import (
     AnthropicReviewer,
     OllamaReviewer,
+    OpenAICompatibleReviewer,
     Reviewer,
+    _post_with_retries,
+    build_provider,
     build_review_prompt,
     build_reviewer,
     load_reviews,
@@ -160,6 +165,93 @@ def test_ollama_reviewer_calls_chat_endpoint_and_parses(monkeypatch) -> None:
     assert captured["json"]["model"] == "qwen2.5:7b"
     assert captured["json"]["messages"][0]["role"] == "system"
     assert captured["json"]["stream"] is False
+
+
+# --- DeepSeek / OpenAI-compatible provider ------------------------------------
+
+
+class _FakeResponse:
+    def __init__(self, payload: dict, status: int = 200) -> None:
+        self.status_code = status
+        self._payload = payload
+
+    def raise_for_status(self) -> None: ...
+    def json(self) -> dict:
+        return self._payload
+
+
+def test_openai_compatible_reviewer_calls_chat_completions(monkeypatch) -> None:
+    import requests
+
+    captured: dict = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):  # noqa: A002 - mirrors requests.post
+        captured.update(url=url, headers=headers, json=json, timeout=timeout)
+        return _FakeResponse({"choices": [{"message": {"content": "Verdict: aligned\nLooks fine."}}]})
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    out = OpenAICompatibleReviewer("deepseek-v4-flash", "sk-x", "https://api.deepseek.com/", 200).review("evidence")
+
+    assert out["text"].startswith("Verdict: aligned") and out["verdict"] == "aligned"
+    assert captured["url"] == "https://api.deepseek.com/chat/completions"  # trailing / normalized + path
+    assert captured["headers"]["Authorization"] == "Bearer sk-x"
+    assert captured["json"]["model"] == "deepseek-v4-flash"
+    assert captured["json"]["messages"][0]["role"] == "system"
+
+
+def test_post_with_retries_recovers_then_succeeds(monkeypatch) -> None:
+    import time
+
+    import requests
+
+    monkeypatch.setattr(time, "sleep", lambda *_: None)
+    calls = {"n": 0}
+
+    def flaky(url, headers=None, json=None, timeout=None):  # noqa: A002
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise requests.RequestException("transient")
+        return _FakeResponse({"ok": True})
+
+    monkeypatch.setattr(requests, "post", flaky)
+    resp = _post_with_retries("u", headers={}, payload={}, timeout=1, retries=2)
+    assert calls["n"] == 2 and resp.json() == {"ok": True}  # retried once, then succeeded
+
+
+def test_post_with_retries_raises_after_exhaustion(monkeypatch) -> None:
+    import time
+
+    import requests
+
+    monkeypatch.setattr(time, "sleep", lambda *_: None)
+    monkeypatch.setattr(requests, "post", lambda *a, **k: (_ for _ in ()).throw(requests.RequestException("down")))
+    with pytest.raises(requests.RequestException):
+        _post_with_retries("u", headers={}, payload={}, timeout=1, retries=1)
+
+
+def test_build_provider_deepseek(monkeypatch) -> None:
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk")
+    reviewer = build_provider("deepseek", "deepseek-v4-flash", "DEEPSEEK_API_KEY", "https://api.deepseek.com", 1000)
+    assert isinstance(reviewer, OpenAICompatibleReviewer) and reviewer._base_url == "https://api.deepseek.com"
+
+
+def test_build_provider_deepseek_no_key_is_none(monkeypatch) -> None:
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    assert build_provider("deepseek", "m", "DEEPSEEK_API_KEY", "https://api.deepseek.com", 100) is None
+
+
+def test_build_provider_unknown_is_none() -> None:
+    assert build_provider("gpt5-imaginary", "m", "X", "u", 100) is None
+
+
+def test_build_reviewer_deepseek_via_env(monkeypatch) -> None:
+    # Flip the in-pipeline reviewer to DeepSeek by env; key comes from the configured api_key_env.
+    monkeypatch.setenv("REVIEW_PROVIDER", "deepseek")
+    monkeypatch.setenv("REVIEW_BASE_URL", "https://api.deepseek.com")
+    monkeypatch.setenv(CONFIG.review.api_key_env, "sk")  # default api_key_env is ANTHROPIC_API_KEY
+    reviewer = build_reviewer(CONFIG.review)
+    assert isinstance(reviewer, OpenAICompatibleReviewer)
+    assert reviewer._base_url == "https://api.deepseek.com"  # REVIEW_BASE_URL plumbed through
 
 
 # --- review_candidates: the cost controls -------------------------------------

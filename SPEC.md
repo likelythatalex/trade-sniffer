@@ -591,11 +591,18 @@ skeptical rubric* to every candidate, and emits a structured verdict. It reviews
   history line.
 - **Pluggable + fail-soft** (mirrors `notify.py`): the `Reviewer` interface allows another
   provider; no key or a failed call simply omits the review and the run continues.
-- **Provider:** `anthropic` (REST Messages API) or `ollama` (local GPU, native `/api/chat`) —
-  both via `requests`, no SDK. `build_reviewer` selects by `review.provider`, with env overrides
-  (`REVIEW_PROVIDER` / `REVIEW_MODEL` / `OLLAMA_BASE_URL`) so one committed config is Anthropic in
-  CI and Ollama locally (the cloud runner can't reach a home GPU). Local Ollama keeps **private
-  journal trade data on-machine**. Maintaining the Ollama server is out-of-repo local infra.
+- **Provider:** `anthropic` (REST Messages API), `ollama` (local GPU, native `/api/chat`), or
+  `deepseek` (OpenAI-wire `/chat/completions`, with timeout + transient-error retries) — all via
+  `requests`, no SDK. A shared `build_provider` maps `provider → client`; `build_reviewer` selects
+  by `review.provider` with env overrides (`REVIEW_PROVIDER` / `REVIEW_MODEL` / `REVIEW_BASE_URL`,
+  legacy `OLLAMA_BASE_URL`) so one committed config is Anthropic in CI and Ollama/DeepSeek locally
+  (the cloud runner can't reach a home GPU). Local Ollama keeps **private journal trade data
+  on-machine**. Maintaining the Ollama server is out-of-repo local infra.
+- **Standalone review CLIs (`src/reviewers/`):** two *separate*, on-demand report-writers reusing
+  the same provider layer — a **code-diff review** and an **outcome review** over the accrued logs.
+  Read-only (write only to gitignored `review_out/`), fail-soft, off unless invoked; rubrics live
+  in version-controlled `prompts/*.md`; config under `reviewers:`. Default to DeepSeek
+  (flash/pro tiers). The outcome reviewer is analysis-only — never trading advice.
 - Output: a `Verdict: aligned|mixed|skeptical` line + a short assessment + a concerns list,
   rendered as text (never HTML-injected — it's model output on a public page).
 

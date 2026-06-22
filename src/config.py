@@ -167,6 +167,9 @@ class TradePlanConfig:
 
 #: Valid trade-plan stop methods (kept here so config validation and the planner agree).
 STOP_METHODS = ("capped", "structural", "atr")
+# Reviewer providers usable by both the in-pipeline reviewer and the standalone review CLIs.
+# deepseek (and any OpenAI-wire-compatible endpoint) is served by one hand-rolled client.
+_REVIEW_PROVIDERS = ("anthropic", "ollama", "deepseek")
 
 
 @dataclass(frozen=True)
@@ -174,13 +177,47 @@ class ReviewConfig:
     """Agent-reviewer settings (SPEC §8.5). Off by default; bounded for cost."""
 
     enabled: bool
-    provider: str             # "anthropic" (cloud) | "ollama" (local); env REVIEW_PROVIDER overrides
+    provider: str             # "anthropic" | "ollama" | "deepseek"; env REVIEW_PROVIDER overrides
     model: str
     api_key_env: str
-    base_url: str             # ollama endpoint (env OLLAMA_BASE_URL overrides); ignored by anthropic
+    base_url: str             # ollama/deepseek endpoint (env REVIEW_BASE_URL/OLLAMA_BASE_URL override); ignored by anthropic
     max_tokens: int
     max_reviews_per_run: int  # hard cap on LLM calls per run
     only_new: bool            # review only NEW transitions, not still-qualifying ones
+
+
+@dataclass(frozen=True)
+class DeepSeekClientConfig:
+    """Shared OpenAI-compatible client settings for the standalone DeepSeek review CLIs.
+
+    The real key is read from ``api_key_env`` at call time — never committed."""
+
+    base_url: str        # OpenAI-compatible endpoint, e.g. https://api.deepseek.com
+    api_key_env: str     # env var holding the key (DEEPSEEK_API_KEY); never committed
+
+
+@dataclass(frozen=True)
+class ReviewerToolConfig:
+    """One standalone review CLI's settings (code-diff review / outcome review)."""
+
+    provider: str            # "deepseek" | "anthropic" | "ollama" (env REVIEW_PROVIDER overrides)
+    model: str               # env REVIEW_MODEL overrides
+    max_input_tokens: int    # truncate the diff/data payload to ~this many tokens (logged)
+    max_tokens: int          # output ceiling
+    timeout: int             # per-request seconds
+    retries: int             # retries on transient (timeout/5xx/429) errors
+
+
+@dataclass(frozen=True)
+class ReviewersConfig:
+    """Standalone, on-demand/CI review CLIs (separate from the in-pipeline ReviewConfig).
+
+    These write markdown to ``review_out/`` and never edit files or place trades. The two tools
+    can use different model tiers (e.g. a cheap one for code, a stronger one for outcomes)."""
+
+    deepseek: DeepSeekClientConfig
+    code: ReviewerToolConfig
+    outcome: ReviewerToolConfig
 
 
 @dataclass(frozen=True)
@@ -220,6 +257,7 @@ class Config:
     scoring: ScoringConfig
     trade_plan: TradePlanConfig
     review: ReviewConfig
+    reviewers: ReviewersConfig
     output: OutputConfig
 
 
@@ -323,6 +361,7 @@ def _build_config(raw: dict) -> Config:
     scoring = _require(raw, "scoring", "")
     trade_plan = _require(raw, "trade_plan", "")
     review = _require(raw, "review", "")
+    reviewers = _require(raw, "reviewers", "")
     output = _require(raw, "output", "")
     notify = _require(output, "notify", "output.")
 
@@ -422,6 +461,7 @@ def _build_config(raw: dict) -> Config:
             max_reviews_per_run=int(_require(review, "max_reviews_per_run", "review.")),
             only_new=bool(_require(review, "only_new", "review.")),
         ),
+        reviewers=_build_reviewers(reviewers),
         output=OutputConfig(
             dir=str(_require(output, "dir", "output.")),
             report_title=str(_require(output, "report_title", "output.")),
@@ -436,6 +476,31 @@ def _build_config(raw: dict) -> Config:
                 suppress_empty=bool(_require(notify, "suppress_empty", "output.notify.")),
             ),
         ),
+    )
+
+
+def _build_reviewers(reviewers: dict) -> ReviewersConfig:
+    """Parse the ``reviewers:`` block (standalone DeepSeek review CLIs)."""
+    deepseek = _require(reviewers, "deepseek", "reviewers.")
+    return ReviewersConfig(
+        deepseek=DeepSeekClientConfig(
+            base_url=str(_require(deepseek, "base_url", "reviewers.deepseek.")),
+            api_key_env=str(_require(deepseek, "api_key_env", "reviewers.deepseek.")),
+        ),
+        code=_build_reviewer_tool(_require(reviewers, "code", "reviewers."), "code"),
+        outcome=_build_reviewer_tool(_require(reviewers, "outcome", "reviewers."), "outcome"),
+    )
+
+
+def _build_reviewer_tool(tool: dict, name: str) -> ReviewerToolConfig:
+    prefix = f"reviewers.{name}."
+    return ReviewerToolConfig(
+        provider=str(_require(tool, "provider", prefix)),
+        model=str(_require(tool, "model", prefix)),
+        max_input_tokens=int(_require(tool, "max_input_tokens", prefix)),
+        max_tokens=int(_require(tool, "max_tokens", prefix)),
+        timeout=int(_require(tool, "timeout", prefix)),
+        retries=int(_require(tool, "retries", prefix)),
     )
 
 
@@ -486,10 +551,24 @@ def _validate(config: Config) -> None:
 
     # Reviewer provider must be a known one. A key being unset is NOT an error (the reviewer
     # just skips, like notify); Ollama needs no key. (REVIEW_PROVIDER can override at runtime.)
-    if config.review.enabled and config.review.provider not in ("anthropic", "ollama"):
+    if config.review.enabled and config.review.provider not in _REVIEW_PROVIDERS:
         raise ConfigError(
-            f"review.provider must be 'anthropic' or 'ollama' (got '{config.review.provider}')."
+            f"review.provider must be one of {_REVIEW_PROVIDERS} (got '{config.review.provider}')."
         )
+
+    # Standalone review CLIs: known providers + sane bounds. No key check here (fail-soft at
+    # call time, like the in-pipeline reviewer) — a missing DEEPSEEK_API_KEY just skips.
+    for name, tool in (("code", config.reviewers.code), ("outcome", config.reviewers.outcome)):
+        if tool.provider not in _REVIEW_PROVIDERS:
+            raise ConfigError(f"reviewers.{name}.provider must be one of {_REVIEW_PROVIDERS} (got '{tool.provider}').")
+        if tool.max_input_tokens <= 0:
+            raise ConfigError(f"reviewers.{name}.max_input_tokens must be > 0 (got {tool.max_input_tokens}).")
+        if tool.max_tokens <= 0:
+            raise ConfigError(f"reviewers.{name}.max_tokens must be > 0 (got {tool.max_tokens}).")
+        if tool.timeout <= 0:
+            raise ConfigError(f"reviewers.{name}.timeout must be > 0 (got {tool.timeout}).")
+        if tool.retries < 0:
+            raise ConfigError(f"reviewers.{name}.retries must be >= 0 (got {tool.retries}).")
 
     # NOTE: we intentionally do NOT fail on a referenced env var being set-but-empty.
     # GitHub Actions turns an *unset* secret (e.g. an optional REPORT_BASE_URL) into an
