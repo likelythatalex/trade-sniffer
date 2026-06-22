@@ -183,6 +183,14 @@ def test_render_dashboard_omits_failed_section_when_none(tmp_path: Path) -> None
     assert "Recently invalidated" not in html
 
 
+def test_render_dashboard_has_filter_toolbar(tmp_path: Path) -> None:
+    cfg = config_with_output(tmp_path)
+    html = report.render_dashboard(CARDS, "daily", cfg, today=date(2024, 6, 1)).read_text(encoding="utf-8")
+    assert 'id="q"' in html and 'id="sort"' in html       # search box + sort control
+    assert 'id="rows-acc"' in html and 'id="rows-dist"' in html  # sortable row containers
+    assert 'data-score="72.00"' in html                   # rows carry score for client-side sort
+
+
 def test_render_dashboard_shows_episode_badge(tmp_path: Path) -> None:
     cfg = config_with_output(tmp_path)
     card = {**CARDS[0], "prior_episode_count": 2,

@@ -21,6 +21,13 @@
     .summary { opacity: .7; font-size: .9rem; }
     .layout { display: flex; gap: 1.25rem; align-items: flex-start; margin-top: 1rem; }
     .list { flex: 0 0 19rem; max-height: 80vh; overflow-y: auto; }
+    .toolbar { display: flex; gap: .4rem; position: sticky; top: 0; background: var(--bg);
+               padding: .1rem 0 .4rem; z-index: 1; }
+    .toolbar input, .toolbar select { font: inherit; font-size: .85rem; color: var(--fg);
+      background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: .25rem .4rem; }
+    .toolbar input { flex: 1 1 auto; min-width: 0; }
+    .toolbar input:focus, .toolbar select:focus { outline: none; border-color: #5aa9ff; }
+    .nomatch { padding: .5rem .6rem; }
     .panel { flex: 1 1 auto; min-width: 0; }
     h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; opacity: .7;
          border-bottom: 1px solid var(--line); padding-bottom: .3rem; margin: 1rem 0 .5rem; }
@@ -118,7 +125,7 @@
   </header>
 
   {% macro row(c) %}
-  <div class="row" data-ticker="{{ c.ticker }}">
+  <div class="row" data-ticker="{{ c.ticker }}" data-score="{{ '%.2f' | format(c.score) }}">
     <span class="tkr">{{ c.ticker }}</span>
     <span class="dir {{ c.direction }}">{{ c.direction[:4] }}</span>
     {% if c.prior_episode_count %}<span class="reflag" title="re-flagged — {{ c.prior_episode_count }} prior episode(s) on this timeframe">↻{{ c.prior_episode_count }}</span>{% endif %}
@@ -128,10 +135,22 @@
 
   <div class="layout">
     <aside class="list">
-      <h2>Accumulation — long ({{ accumulation | length }})</h2>
-      {% for c in accumulation %}{{ row(c) }}{% else %}<p class="empty">None flagged.</p>{% endfor %}
-      <h2>Distribution — short ({{ distribution | length }})</h2>
-      {% for c in distribution %}{{ row(c) }}{% else %}<p class="empty">None flagged.</p>{% endfor %}
+      <div class="toolbar">
+        <input id="q" type="search" placeholder="filter ticker…" autocomplete="off" aria-label="filter by ticker" />
+        <select id="sort" aria-label="sort candidates">
+          <option value="score-desc">score ↓</option>
+          <option value="score-asc">score ↑</option>
+          <option value="ticker">ticker A–Z</option>
+        </select>
+      </div>
+      <h2>Accumulation — long (<span class="count" id="count-acc">{{ accumulation | length }}</span>)</h2>
+      <div class="rows" id="rows-acc">{% for c in accumulation %}{{ row(c) }}{% endfor %}</div>
+      {% if not accumulation %}<p class="empty">None flagged.</p>{% endif %}
+      <p class="empty nomatch" id="nomatch-acc" hidden>No matches.</p>
+      <h2>Distribution — short (<span class="count" id="count-dist">{{ distribution | length }}</span>)</h2>
+      <div class="rows" id="rows-dist">{% for c in distribution %}{{ row(c) }}{% endfor %}</div>
+      {% if not distribution %}<p class="empty">None flagged.</p>{% endif %}
+      <p class="empty nomatch" id="nomatch-dist" hidden>No matches.</p>
 
       {% if failed %}
       <details class="failed-setups">
@@ -328,6 +347,42 @@
     }
 
     document.querySelectorAll(".row").forEach((r) => r.addEventListener("click", () => render(r.dataset.ticker)));
+
+    // Client-side filter + sort of the candidate list (all data is already in the page; no
+    // backend). Re-orders the SAME row elements, so their click handlers survive.
+    const qInput = document.getElementById("q");
+    const sortSel = document.getElementById("sort");
+    function applyView() {
+      const term = qInput.value.trim().toUpperCase();
+      const mode = sortSel.value;
+      [["rows-acc", "count-acc", "nomatch-acc"], ["rows-dist", "count-dist", "nomatch-dist"]].forEach(
+        ([rowsId, countId, noMatchId]) => {
+          const box = document.getElementById(rowsId);
+          if (!box) return;
+          const rows = Array.from(box.children);
+          let visible = 0;
+          rows.forEach((r) => {
+            const show = !term || r.dataset.ticker.includes(term);
+            r.style.display = show ? "" : "none";
+            if (show) visible++;
+          });
+          rows.sort((a, b) => {
+            if (mode === "ticker") return a.dataset.ticker < b.dataset.ticker ? -1 : 1;
+            const sa = parseFloat(a.dataset.score), sb = parseFloat(b.dataset.score);
+            return mode === "score-asc" ? sa - sb : sb - sa;
+          });
+          rows.forEach((r) => box.appendChild(r));  // re-append in sorted order
+          const count = document.getElementById(countId);
+          if (count) count.textContent = term ? `${visible}/${rows.length}` : `${rows.length}`;
+          const noMatch = document.getElementById(noMatchId);
+          if (noMatch) noMatch.hidden = !(rows.length > 0 && visible === 0);
+        }
+      );
+    }
+    if (qInput && sortSel) {
+      qInput.addEventListener("input", applyView);
+      sortSel.addEventListener("change", applyView);
+    }
 
     // Fullscreen toggle for the chart (autoSize resizes it via its ResizeObserver).
     document.getElementById("fs-btn").addEventListener("click", () => {

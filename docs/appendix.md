@@ -464,7 +464,10 @@ version. Think of it as a README for the *domain*, not the code.
   confirmed **SC/BC** climax markers, the suggested entry/stop/target lines, and a short
   Wyckoff legend caption under the chart. Keeps an "open in TradingView" link + attribution.
   Re-flagged setups carry a `↻N` badge + a prior-episode history line (see *Episode / Transition
-  History*); a collapsed "Recently invalidated" list shows setups that dropped off this run.
+  History*); a collapsed "Recently invalidated" list shows setups that dropped off this run. A
+  toolbar adds **client-side search/filter/sort** of the candidate list (ticker filter + score/
+  ticker sort) — pure JS over the embedded data, **no backend**. Mutating views (universe
+  add/remove, journal CRUD) need a backend and are deferred to **Hosting Phase B** (ROADMAP).
   Plus `write_tv_import_file` (secondary `.txt`), `write_index_page` (`index.html` landing
   page), and `append_signals` (schema-stable, self-migrating log).
 - **Status:** `IMPLEMENTED` (`report.py`, tested in `tests/test_report.py`); wired
