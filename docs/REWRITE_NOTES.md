@@ -60,16 +60,29 @@ The accrued data is just CSVs with **stable, versioned, self-migrating** schemas
 - **Mobile-first / installable PWA** UI from the start; responsive; offline-tolerant reads.
 - **Auth + multi-device** (single-user assumption?); how the private app is reached (Tailscale /
   Cloudflare Tunnel / VPS).
-- Scheduling: keep the scan in CI vs v2 owning it (needs always-on host) — see open decisions.
-- Notifications: Discord today; revisit (push / PWA notifications / Telegram).
+- Notifications: Discord today; v2's own scheduler can push (PWA push / Discord / Telegram).
 - Reuse the existing **test suite** philosophy (pure fixtures, hermetic, network-mocked).
 
-## Open decisions (resolve at the start of the v2 session)
+## Decisions (resolved 2026-06-22)
 
-1. **Client form factor** — responsive web/PWA served by the Python backend (reuses the brain,
-   one codebase) vs native mobile.  *(asked 2026-06-22)*
-2. **Who runs the scheduled scan** — stays in GitHub Actions (free, runs when devices are off;
-   v2 = interactive layer) vs v2 owns scheduling (needs an always-on host).  *(asked)*
-3. **Any public surface** — fully private (only your devices/tailnet) vs keep a public read-only
-   dashboard alongside the private app.  *(asked)*
-4. Storage = SQLite assumed (above) — confirm, and confirm single-user.
+1. **Client = responsive web app / PWA**, served by the Python backend. One codebase, installable
+   on phone, brain stays server-side. No native mobile.
+2. **v2 owns scheduling** (it runs the unattended scans itself — replacing v1's GitHub Actions
+   cron). Implications:
+   - Needs an **always-on host** — a local-only-when-PC-on install is NOT enough for unattended
+     scans. So: a small VPS / always-on box / managed host, **privately gated** (Tailscale or
+     Cloudflare Tunnel, or VPS + auth) since v2 is fully private.
+   - Backend scheduler (APScheduler / host cron / a worker) with per-timeframe schedules (daily
+     after US close, weekly Sat), mirroring v1.
+   - **Ops shift:** you now own uptime, cost, and **backups of the SQLite store** (it becomes the
+     single source of truth + holds the accrued dataset — gh-pages no longer does).
+3. **Fully private** (only your devices, e.g. behind Tailscale). No public surface in v2.
+   - v1's **public** gh-pages scanner keeps running **until v2's scheduler is live + validated**,
+     then: final data import → **retire v1** (archive the public repo / leave it static).
+
+### Still to decide at the v2 session
+- **Hosting target + private access:** home always-on box vs $5 VPS vs managed (Fly.io/Render),
+  and Tailscale vs Cloudflare Tunnel vs VPS+auth. (Budget/uptime/comfort call.)
+- **SQLite confirmed** as the store; **single-user** assumed — confirm.
+- Cutover plan: run v1 (accruing) and v2 in parallel; avoid double-writing one store (v1 writes
+  CSVs, v2 imports); flip the schedule to v2 once validated.
