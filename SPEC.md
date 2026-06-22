@@ -771,7 +771,13 @@ can be wrong, do your own research.
   means something. (This is *why* per-strategy scores are logged separately now.)
 - **Backtesting harness**: replay `signals.csv` forward N bars to test whether high scores
   preceded markup/markdown. Must use a point-in-time universe to avoid survivorship bias
-  (§4.1). The §8.4 logging is designed to enable this.
+  (§4.1). The §8.4 logging is designed to enable this. *Built:* the replay IC harness
+  (`src/backtest/`, survivorship-biased, caveated) **and** the first point-in-time analysis —
+  the **failed→revived event study** (`backtest/event_study.py`): reconstructs episodes
+  (`episodes.py`) from the live log and measures close-path MFE/MAE + time-to-target of the
+  *revived* vs *first-time* cohort. Offline, no survivorship bias, no schema change; close-based
+  + data-gated. Kept separate from the IC harness (no `transition` conditioning → no selection
+  bias).
 - **Regime-aware feature baselines** (e.g. resetting the volatility baseline after an
   earnings-driven expansion so "narrow spread" stays meaningful). v1 deliberately uses a
   plain rolling window; this is acknowledged but out of scope.

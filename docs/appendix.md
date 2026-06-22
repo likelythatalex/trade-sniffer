@@ -328,7 +328,28 @@ version. Think of it as a README for the *domain*, not the code.
   accumulated live `signals.csv` (point-in-time by construction) with the same
   `outcomes`/`metrics` code as it grows (Phase 2).
 - **Status:** `PARTIAL` (`src/backtest/`): replay backtester built + caveated; the
-  point-in-time (live-`signals.csv`) path is the remaining piece.
+  point-in-time (live-`signals.csv`) path is the remaining piece — first instance now built
+  (see *Failed→Revived Event Study*).
+
+### Failed→Revived Event Study (MFE)
+- **Plain meaning:** When a setup flags, invalidates, then re-qualifies, did that "second
+  chance" eventually work? A *path-dependent* question — a fixed-horizon average can't see a
+  dip-then-trigger — so it needs maximum favorable/adverse excursion (MFE/MAE) + time-to-target,
+  not a single forward return.
+- **How it's implemented here:** `backtest/event_study.py` (`python -m src.backtest.event_study`)
+  reconstructs episodes (`episodes.py`) from the accumulated **live `signals.csv`** and walks the
+  forward **close** path logged after each episode's entry, recording MFE/MAE/time-to-target;
+  then compares the **revived** cohort (every non-first episode) against **first-time** flags.
+  It's the first **point-in-time** analysis (the log is causal by construction → **no
+  survivorship bias**, unlike replay), needs no network, and adds no schema. Honest limits:
+  excursions are **close-based** (the log lacks intrabar highs/lows, so MFE/MAE are
+  under-stated) and it's **data-gated** (only as meaningful as accrued fail→revive history). It
+  is kept *separate* from the core IC harness so the core backtest is never conditioned on
+  `transition` (which would be selection bias). True-OHLC, plan-resolved (stop-vs-target,
+  realized-R) outcomes are the separate FUTURE "plan-outcome simulator" (which reuses
+  `trade_outcome.evaluate_outcome`).
+- **Status:** `IMPLEMENTED` (tooling) / data-gated (results) (`backtest/event_study.py`, tested
+  in `tests/test_event_study.py`). SPEC §12 ("Backtesting harness"); ROADMAP.
 
 ### Lookahead Bias
 - **Plain meaning:** Accidentally using information not available at decision time, making

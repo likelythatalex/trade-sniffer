@@ -89,6 +89,24 @@ the replay mode scores today's universe, so it carries *survivorship bias* — u
 calibration/iteration, not as an unbiased verdict (the report says so too). See
 [ROADMAP.md](ROADMAP.md) for the unbiased (live-`signals.csv`) Phase 2.
 
+### Failed→revived event study (offline, point-in-time)
+
+A separate, path-dependent question the fixed-horizon IC above can't answer: when a setup
+flags, invalidates, then **re-qualifies**, does that "second chance" tend to fulfil — or is a
+re-flag a warning? It reconstructs episodes from the accumulated **live `signals.csv`** and
+measures each one's forward **maximum favorable / adverse excursion** + time-to-target, then
+compares the *revived* cohort against *first-time* flags.
+
+```bash
+python -m src.backtest.event_study --timeframe daily --target 0.10 --max-horizon 60
+```
+
+Because it's built from the point-in-time log, it carries **no survivorship bias** (the honest
+counterpart to replay) and needs no network. Two honest limits: excursions are **close-based**
+(the log has closes, not intrabar highs/lows, so MFE/MAE are under-stated), and it's
+**data-gated** — meaningful numbers need accrued fail→revive history. Writes to
+`backtest_results/` (gitignored).
+
 ## Agent reviewer (optional, off by default)
 
 A proactive, objective due-diligence pass on **newly-flagged** setups: at scan time it asks an
