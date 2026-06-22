@@ -4,5 +4,11 @@
     "verdict": "mixed",
     "model": "claude-haiku-4-5-20251001",
     "date": "2026-06-20"
+  },
+  "daily:D": {
+    "text": "**Verdict: mixed**\n\nThe setup shows a plausible rejection at resistance (69.28) with volume corroboration and a tightening range\u2014classic distribution warning signs. However, the conviction is inflated by a critical contradiction: **trend_regime scores +57 (uptrend), yet range_structure, volume_behavior, and spring_upthrust all score heavily negative (\u221261 to \u2212100).** This internal conflict suggests the scanner may be conflating price proximity to MA with genuine accumulation regime behavior, while simultaneously flagging distribution signals.\n\n**Concerns:**\n\n- **Opposing regime signals:** Price above MA (uptrend flag) contradicts the strong distribution sub-scores. In Wyckoff terms, a true distribution setup requires either a established uptrend showing signs of weakening, or a volatile range. Here, the uptrend context partially undermines the rejection narrative\u2014the false break may be a minor correction within a larger uptrend, not an early distribution phase.\n- **Thin confirmation depth:** Positive news sentiment (4 headlines) and a single rejection wick are weak counters to price still near highs (68.04 vs 69.28 high; only ~1.8% below). No sign of supply absorption, climactic volume spike on the upthrust, or bearish divergence in momentum\u2014just momentum at +4 (nearly neutral).\n- **Range structure scoring (-61):** The range (59.66\u201369.28) spans ~16.3%, reasonable for distribution, but the recent bar action shows only modest consolidation (Jun 22 close 68.04 is only ~65 bps below Jun 18 high). Tighter, longer consolidation would be more convincing.\n\n**Recommendation for reviewer:** Treat as a **conditional flag** \u2014 monitor for a second or third rejection at 69.28 with increasing volume and widening down-bars before crediting distribution. Current evidence leans tentative.",
+    "verdict": "mixed",
+    "model": "claude-haiku-4-5-20251001",
+    "date": "2026-06-22"
   }
 }

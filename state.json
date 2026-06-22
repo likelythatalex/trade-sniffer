@@ -1,10 +1,10 @@
 {
   "daily": {
-    "run_ts": "2026-06-20T10:18:39+00:00",
+    "run_ts": "2026-06-22T23:17:21+00:00",
     "qualifying": {
-      "DVN": {
-        "score": 73.61,
-        "direction": "accumulation"
+      "D": {
+        "score": 76.3,
+        "direction": "distribution"
       }
     }
   },
