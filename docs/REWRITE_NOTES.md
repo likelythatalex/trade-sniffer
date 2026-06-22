@@ -63,6 +63,59 @@ The accrued data is just CSVs with **stable, versioned, self-migrating** schemas
 - Notifications: Discord today; v2's own scheduler can push (PWA push / Discord / Telegram).
 - Reuse the existing **test suite** philosophy (pure fixtures, hermetic, network-mocked).
 
+## Industry feature survey (v2 MUST actively propose — user priority)
+
+Explicit v2 task: do a feature-discovery pass on what's **popular/beloved in the industry** —
+from BOTH a **quant/technical** lens and a **professional discretionary trader** lens — and
+propose what to adopt. The list below is a *seed to prioritize*, not a commit-all. Filter every
+candidate against the project's invariants: **flag candidates for human review, NEVER execute
+trades** (order routing / broker write is permanently out of scope), point-in-time / no-lookahead,
+and YAGNI (each feature must earn its place). "(have)" = a v1 building block to extend.
+
+### Quant / technical lens
+- **Validation rigor:** walk-forward + out-of-sample (have `--oos-frac`), purged / combinatorial
+  k-fold CV (López de Prado), Monte-Carlo / bootstrap of the equity curve & drawdowns,
+  multiple-testing correction / **deflated Sharpe** (many `[TUNABLE]` knobs → real overfit risk),
+  IC decay over horizon (have IC).
+- **Cost realism:** transaction-cost model — commission + **slippage** — in the plan-sim (currently
+  ignored), turnover + **capacity** analysis.
+- **Performance/risk suite:** Sharpe / Sortino / Calmar, CAGR, max drawdown + duration, profit
+  factor, expectancy, exposure, **R-multiple distribution** (have MFE/MAE + realized R).
+- **Position sizing:** volatility targeting, fractional **Kelly**, ATR-based (have ATR),
+  correlation-aware / portfolio **"heat"** caps.
+- **Portfolio view:** correlation matrix, sector / factor exposure, concentration limits, beta &
+  excess-vs-SPY (have excess returns).
+- **Regime / factor:** volatility regime (VIX), factor tilts (momentum / value / quality / size),
+  market regime + breadth (have Phase 1).
+- **Signal hygiene:** correlation-aware strategy stacking (on roadmap), point-in-time data
+  versioning, a reproducible feature store.
+
+### Professional discretionary trader lens
+- **Watchlists** (multiple, custom) + **alerts** (level cross / signal fires / transition) via
+  push / PWA / Discord / Telegram.
+- **Charting pros expect:** VWAP + **anchored VWAP**, volume profile / market-profile (TPO),
+  multi-pane **multi-timeframe confluence**, relative-strength line, **replay mode**, drawing
+  tools, saved layouts, hotkeys.
+- **Screeners:** saveable custom filters (extend the new search/filter), sector / industry
+  **heatmaps**, a breadth dashboard.
+- **Calendars:** **earnings** + economic-event proximity (flag / avoid around earnings),
+  seasonality.
+- **Journal pro features** (build on the journal): setup **tags / taxonomy**, screenshot attach,
+  R-multiple + **equity curve**, **calendar P&L heatmap**, win/loss streaks, time-of-day & by-setup
+  "**edge**" analytics, pre/post-trade **checklists**, notes / psychology.
+- **Explainability:** per-flag "why" (have reasons + agent reviewer), suggested plan + management
+  (have).
+- **Risk dashboard:** open risk / daily loss limit / max positions / "don't double up"
+  correlation warnings.
+- **UX:** mobile parity (PWA), dark mode (have), fast keyboard nav, customizable layout.
+
+### How to use this in v2
+Shortlist by **value × fit × effort**; sequence as thin vertical slices; keep the "never trades" +
+no-lookahead invariants; prefer features that **compound existing assets** (the accrued
+`signals.csv`, the journal, the backtest tooling) over net-new subsystems; and **re-survey
+periodically** — the industry moves. The v2 session should produce a ranked proposal from this,
+not silently inherit it.
+
 ## Decisions (resolved 2026-06-22)
 
 1. **Client = responsive web app / PWA**, served by the Python backend. One codebase, installable
