@@ -519,3 +519,12 @@ ZBH
 ZBRA
 ZS
 ZTS
+
+# --- Manual additions (NOT from the S&P 500 / Nasdaq-100 generator) ---
+# Re-running scripts/build_universe.py rewrites this file and will DROP these.
+# Nuclear / uranium names:
+CCJ
+LEU
+OKLO
+SMR
+UUUU
