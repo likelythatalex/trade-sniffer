@@ -1,9 +1,13 @@
 {
   "daily": {
-    "run_ts": "2026-06-22T23:17:21+00:00",
+    "run_ts": "2026-06-23T23:07:42+00:00",
     "qualifying": {
-      "D": {
-        "score": 76.3,
+      "HLT": {
+        "score": 70.68,
+        "direction": "distribution"
+      },
+      "IEX": {
+        "score": 73.82,
         "direction": "distribution"
       }
     }
