@@ -34,5 +34,11 @@
     "verdict": "skeptical",
     "model": "claude-haiku-4-5-20251001",
     "date": "2026-06-24"
+  },
+  "daily:TFC": {
+    "text": "**Verdict: mixed**\n\nTFC shows legitimate distribution *structure* (buying climax, false break above 52.07 resistance, volume on the upthrust rejection) consistent with Wyckoff supply testing. However, the conviction score (75) appears inflated given the contradictory subscore signals: range structure and confirmation are weak (\u221244, \u221246), and\u2014critically\u2014positive momentum (+30) and uptrend regime (+33) actively work *against* a distribution narrative. The positive news sentiment (10 headlines) further muddies the picture.\n\n**Concerns:**\n- **Conflicting regime signals:** Price remains above its moving average, momentum is positive, and the trend regime is net bullish (+33). Classic distribution unfolds amid deteriorating momentum; this setup has neither. The upthrust rejection is real, but without momentum breakdown, it reads as a normal pullback in an uptrend rather than supply capitulation.\n- **Shallow range & weak confirmation:** The range (44.43\u201352.07, ~17% band) is narrow, and the recent 6-bar pullback from 52.07 (June 15\u201325) shows reduced volume and minimal supply aggression. True distribution climaxes leave heavier evidence of institutional selling pressure on the reversal.\n- **First flag, no history:** No prior episode context. A single false break near a round level (52.07) in a young uptrend is common noise; without repeated testing or prior accumulation evidence, odds of this being deliberate distribution are lower.\n\n**Recommendation for human review:** Recheck volume profiles on the 52.07 test and the June 15 rejection bar. If volume was light *into* resistance and lighter still on the decline, skepticism is warranted. Monitor whether price holds 48\u201349 support or reclaims the range; only multiple rejections + momentum divergence solidify a distribution case.",
+    "verdict": "mixed",
+    "model": "claude-haiku-4-5-20251001",
+    "date": "2026-06-25"
   }
 }

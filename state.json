@@ -1,25 +1,13 @@
 {
   "daily": {
-    "run_ts": "2026-06-24T23:02:29+00:00",
+    "run_ts": "2026-06-25T23:16:25+00:00",
     "qualifying": {
-      "ABNB": {
-        "score": 73.73,
-        "direction": "distribution"
-      },
       "DVN": {
-        "score": 70.94,
+        "score": 72.26,
         "direction": "accumulation"
       },
-      "HLT": {
-        "score": 70.01,
-        "direction": "distribution"
-      },
-      "IEX": {
-        "score": 76.11,
-        "direction": "distribution"
-      },
-      "LYV": {
-        "score": 70.46,
+      "TFC": {
+        "score": 75.25,
         "direction": "distribution"
       }
     }
