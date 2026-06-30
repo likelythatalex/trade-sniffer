@@ -1,28 +1,7 @@
 {
   "daily": {
-    "run_ts": "2026-06-29T22:54:51+00:00",
-    "qualifying": {
-      "ABNB": {
-        "score": 76.62,
-        "direction": "distribution"
-      },
-      "DVN": {
-        "score": 77.09,
-        "direction": "accumulation"
-      },
-      "HD": {
-        "score": 84.12,
-        "direction": "distribution"
-      },
-      "TFC": {
-        "score": 71.87,
-        "direction": "distribution"
-      },
-      "WFC": {
-        "score": 72.35,
-        "direction": "distribution"
-      }
-    }
+    "run_ts": "2026-06-30T23:09:59+00:00",
+    "qualifying": {}
   },
   "weekly": {
     "run_ts": "2026-06-27T15:20:10+00:00",
