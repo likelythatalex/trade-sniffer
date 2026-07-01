@@ -1,7 +1,16 @@
 {
   "daily": {
-    "run_ts": "2026-06-30T23:09:59+00:00",
-    "qualifying": {}
+    "run_ts": "2026-07-01T23:13:07+00:00",
+    "qualifying": {
+      "HD": {
+        "score": 77.58,
+        "direction": "distribution"
+      },
+      "WFC": {
+        "score": 84.63,
+        "direction": "distribution"
+      }
+    }
   },
   "weekly": {
     "run_ts": "2026-06-27T15:20:10+00:00",
