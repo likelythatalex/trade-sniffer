@@ -1,13 +1,17 @@
 {
   "daily": {
-    "run_ts": "2026-07-01T23:13:07+00:00",
+    "run_ts": "2026-07-02T23:03:42+00:00",
     "qualifying": {
-      "HD": {
-        "score": 77.58,
+      "AIG": {
+        "score": 70.52,
+        "direction": "distribution"
+      },
+      "PG": {
+        "score": 79.15,
         "direction": "distribution"
       },
       "WFC": {
-        "score": 84.63,
+        "score": 82.35,
         "direction": "distribution"
       }
     }

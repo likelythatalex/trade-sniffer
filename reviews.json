@@ -52,5 +52,17 @@
     "verdict": "mixed",
     "model": "claude-haiku-4-5-20251001",
     "date": "2026-07-01"
+  },
+  "daily:PG": {
+    "text": "**Verdict: mixed**\n\n**Assessment:**\nPG shows genuine distribution structure\u2014a buying climax (153.35 high on 6/24), rejection wicks, and volume corroboration all align with Wyckoff distribution mechanics. However, the conviction sits on fragile footing: momentum and trend regime remain *positive* (+53 and +36), contradicting the distribution narrative, and the most recent bar (7/2) is a strong recovery rally that reverses the prior weakness. The setup is credible as a *potential* distribution zone, but the positive momentum and lack of prior episode history undermine certainty.\n\n**Concerns:**\n- **Conflicting signals:** Positive momentum (+53) and uptrend regime (+36) weaken a 79-conviction distribution call. Wyckoff distribution typically shows deteriorating momentum during the process.\n- **Recent rally weakness:** The 7/2 bar closes at 151.41\u2014nearly test-touching the 153.35 resistance again after 6/30's breakdown. This suggests either incomplete distribution or renewed accumulation interest, not conviction selling.\n- **No spring/upthrust precedent & single episode:** First flag on this timeframe with no prior history limits pattern confidence. Stronger distribution cases show multiple failed attempts to clear resistance.",
+    "verdict": "mixed",
+    "model": "claude-haiku-4-5-20251001",
+    "date": "2026-07-02"
+  },
+  "daily:AIG": {
+    "text": "**Verdict: skeptical**\n\nThe flag conflates competing signals without resolving them. While the setup exhibits a textbook buying climax near range resistance (79.42), the negative sub-scores for range structure (\u221299) and volume behavior (\u2212100) indicate the pattern lacks foundational Wyckoff discipline. The positive momentum and uptrend regime scores (+68, +53) contradict the distribution thesis, and positive news sentiment actively opposes a distribution narrative. The absence of a spring/upthrust and prior episode history weakens conviction further\u2014there is no prior accumulation base to distribute from.\n\n**Concerns:**\n- **Conflicting conviction drivers:** Positive momentum, uptrend posture, and positive headlines do not support distribution; they align with continued accumulation or momentum continuation, not supply dominance.\n- **Structural weakness:** Range structure at \u221299 and volume behavior at \u2212100 suggest the price action does not follow classic Wyckoff distribution mechanics (no sign of weakness, poor effort, volume drying up on rallies). Last bar (7/2) shows aggressive expansion into range top\u2014classic accumulation/breakout, not supply rejection.\n- **No context for distribution:** First flag on this timeframe with no prior accumulation episode; without a known supply level being loaded, calling this \"distribution\" is speculative. The uptrend regime score (+53) undermines the distribution case.\n\n**Recommendation:** Rescreen for accumulation structure or momentum breakout continuation. If distribution is intended, require evidence of prior accumulation, climactic volume on rally failure, and confirmed weakness on pullbacks\u2014none evident here.",
+    "verdict": "skeptical",
+    "model": "claude-haiku-4-5-20251001",
+    "date": "2026-07-02"
   }
 }
