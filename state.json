@@ -1,9 +1,9 @@
 {
   "daily": {
-    "run_ts": "2026-07-02T23:03:42+00:00",
+    "run_ts": "2026-07-03T23:00:36+00:00",
     "qualifying": {
       "AIG": {
-        "score": 70.52,
+        "score": 70.42,
         "direction": "distribution"
       },
       "PG": {
