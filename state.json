@@ -1,20 +1,7 @@
 {
   "daily": {
-    "run_ts": "2026-07-03T23:00:36+00:00",
-    "qualifying": {
-      "AIG": {
-        "score": 70.42,
-        "direction": "distribution"
-      },
-      "PG": {
-        "score": 79.15,
-        "direction": "distribution"
-      },
-      "WFC": {
-        "score": 82.35,
-        "direction": "distribution"
-      }
-    }
+    "run_ts": "2026-07-06T23:05:00+00:00",
+    "qualifying": {}
   },
   "weekly": {
     "run_ts": "2026-07-04T15:11:02+00:00",
