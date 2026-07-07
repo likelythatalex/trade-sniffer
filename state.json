@@ -1,7 +1,12 @@
 {
   "daily": {
-    "run_ts": "2026-07-06T23:05:00+00:00",
-    "qualifying": {}
+    "run_ts": "2026-07-07T22:58:57+00:00",
+    "qualifying": {
+      "TFC": {
+        "score": 77.73,
+        "direction": "distribution"
+      }
+    }
   },
   "weekly": {
     "run_ts": "2026-07-04T15:11:02+00:00",
