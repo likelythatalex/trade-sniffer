@@ -1,12 +1,7 @@
 {
   "daily": {
-    "run_ts": "2026-07-08T23:04:09+00:00",
-    "qualifying": {
-      "WM": {
-        "score": 72.52,
-        "direction": "distribution"
-      }
-    }
+    "run_ts": "2026-07-09T23:09:17+00:00",
+    "qualifying": {}
   },
   "weekly": {
     "run_ts": "2026-07-04T15:11:02+00:00",
