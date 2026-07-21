@@ -70,5 +70,11 @@
     "verdict": "mixed",
     "model": "claude-haiku-4-5-20251001",
     "date": "2026-07-08"
+  },
+  "daily:WYNN": {
+    "text": "**Verdict: mixed**\n\nThe setup shows genuine structural markers\u2014tight range, volume corroboration on the spring attempt, and rejection wick behavior\u2014but is undermined by weak confirmation and conflicting momentum signals that are difficult to square with accumulation narrative.\n\n**Assessment:**\nRange structure and spring mechanics are credible: narrow down-bar at 94.36 low on 7/21 with recovery inside; prior support cluster near 94\u201396 zone; low volume on the dip consistent with weak supply. However, the +8 confirmation score is a serious red flag\u2014Wyckoff accumulation requires emerging demand evidence (widening spreads, volume increase into recovery), yet recent bars (7/16\u20137/21) show compression, narrow closes, and erratic direction. Momentum and trend regime scores (-55 and -58) openly contradict the accumulation thesis: price remains below MA, RSI/MACD likely negative, and relative weakness vs. SPY suggests distributional rather than accumulative behavior. The positive news sentiment (+2 headlines) is thin and often lagging.\n\n**Concerns:**\n- **Confirmation is nominal (+8):** Recovery bars lack the widening spreads and volume surge typical of early demand. Recent price action is ambiguous, not constructive.\n- **Momentum deeply negative:** -58 trend and -55 momentum scores are not minor\u2014they signal active selling pressure, not accumulation pause. This contradicts the 75/100 overall conviction.\n- **No prior episode history:** First flag on this timeframe means no pattern repetition or known support structure; reduces confidence in range validity.\n\n**Recommendation for human review:** Treat this as a *weak* candidate. Require tighter confirmation (wider spreads + volume surge on next bounce attempt) before escalating conviction.",
+    "verdict": "mixed",
+    "model": "claude-haiku-4-5-20251001",
+    "date": "2026-07-21"
   }
 }
