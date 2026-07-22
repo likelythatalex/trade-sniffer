@@ -1,10 +1,10 @@
 {
   "daily": {
-    "run_ts": "2026-07-21T22:53:59+00:00",
+    "run_ts": "2026-07-22T23:00:08+00:00",
     "qualifying": {
-      "WYNN": {
-        "score": 75.36,
-        "direction": "accumulation"
+      "IR": {
+        "score": 73.17,
+        "direction": "distribution"
       }
     }
   },

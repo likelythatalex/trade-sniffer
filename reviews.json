@@ -76,5 +76,11 @@
     "verdict": "mixed",
     "model": "claude-haiku-4-5-20251001",
     "date": "2026-07-21"
+  },
+  "daily:IR": {
+    "text": "**Verdict: mixed**\n\nThis setup shows classic distribution signatures (buying climax, false upthrust break, volume rejection, relative weakness vs SPY, negative sentiment) that align with Wyckoff phase C mechanics. However, the conviction score (73) overshoots the evidence quality: trend_regime and momentum are *positive*, pulling against the distribution case, and there is **no documented prior accumulation episode or spring/upthrust marker**\u2014meaning we cannot validate this is genuine phase C distribution vs. a normal pullback within an uptrend.\n\n**Concerns:**\n- **Momentum contradiction**: +60 score and price above MA directly conflict with distributional weakness; pattern could be early-uptrend consolidation, not yet committed selling.\n- **No baseline context**: First-time flag with no prior episode history makes it impossible to assess whether range structure truly signals exhaustion or is routine chop; spring/upthurst marker absent weakens the setup's Wyckoff pedigree.\n- **Volume corroboration claim unvalidated**: Tags cite \"volume corroboration\" but sub-score breakdown does not detail whether volume on the false break (7/16\u20137/17) and subsequent closes (7/20\u20137/21) showed institutional selling or just price rejection; thin bars 7/15, 7/21 raise ambiguity.\n\n**Recommendation for human reviewer:** Treat as a *conditional watch*, not an accumulation signal. Verify that volume on 7/20 (test below 80) and 7/21\u20137/22 bounces shows genuine supply exhaustion (declining volume on rallies, climactic volume on breaks). If momentum stays positive and price re-tests the 85.1 high, downgrade conviction sharply.",
+    "verdict": "mixed",
+    "model": "claude-haiku-4-5-20251001",
+    "date": "2026-07-22"
   }
 }
