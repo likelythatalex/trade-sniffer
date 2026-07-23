@@ -1,12 +1,7 @@
 {
   "daily": {
-    "run_ts": "2026-07-22T23:00:08+00:00",
-    "qualifying": {
-      "IR": {
-        "score": 73.17,
-        "direction": "distribution"
-      }
-    }
+    "run_ts": "2026-07-23T22:53:49+00:00",
+    "qualifying": {}
   },
   "weekly": {
     "run_ts": "2026-07-18T14:59:18+00:00",
