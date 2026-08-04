@@ -1,12 +1,7 @@
 {
   "daily": {
-    "run_ts": "2026-08-03T22:57:35+00:00",
-    "qualifying": {
-      "CBRE": {
-        "score": 71.17,
-        "direction": "distribution"
-      }
-    }
+    "run_ts": "2026-08-04T23:01:05+00:00",
+    "qualifying": {}
   },
   "weekly": {
     "run_ts": "2026-08-01T15:05:05+00:00",
