@@ -94,5 +94,11 @@
     "verdict": "mixed",
     "model": "claude-haiku-4-5-20251001",
     "date": "2026-08-10"
+  },
+  "daily:SBUX": {
+    "text": "Verdict: **skeptical**\n\nThe flag is internally contradictory and shows weak distribution conviction. Multiple sub-scores strongly favor accumulation (volume_behavior -100, spring_upthrust -100, range_structure -50), yet the scanner tags this as distribution. The \"upthrust: false break above resistance, rejected\" logic is thin\u2014price closed at 106.66, within the range (93.64\u2013109.23), without a decisive rejection wick or follow-through breakdown. Recent bars show tight consolidation and minor noise, not climactic selling or institutional unload pressure. The +38 trend_regime and positive sentiment tags further undercut a distribution narrative.\n\n**Concerns:**\n- **Contradictory scoring**: three major sub-scores align with accumulation, making the distribution label difficult to justify; confidence should be much lower.\n- **Weak rejection evidence**: the \"upthrust wick\" claim lacks conviction; bars 2026-07-30 and 2026-07-31 tested resistance but the subsequent action (consolidation, slight chop) is neither a clean false break nor a climactic squeeze.\n- **No prior episode or spring baseline**: first-time flag with no comparative history; unclear whether this range and price action are statistically unusual for SBUX on this timeframe.\n\n**Recommendation for human review:** Flag this as a candidate for **re-tuning or deprioritization**. If the intent is to catch early distribution, the evidence is inconclusive; if accumulation is suspected, the scoring contradicts the output. Request volume profile and institutional flow data before escalating.",
+    "verdict": "skeptical",
+    "model": "claude-haiku-4-5-20251001",
+    "date": "2026-08-11"
   }
 }
