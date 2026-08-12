@@ -1,16 +1,7 @@
 {
   "daily": {
-    "run_ts": "2026-08-11T22:38:16+00:00",
-    "qualifying": {
-      "RVTY": {
-        "score": 74.92,
-        "direction": "distribution"
-      },
-      "SBUX": {
-        "score": 70.35,
-        "direction": "distribution"
-      }
-    }
+    "run_ts": "2026-08-12T22:37:13+00:00",
+    "qualifying": {}
   },
   "weekly": {
     "run_ts": "2026-08-08T14:36:38+00:00",
