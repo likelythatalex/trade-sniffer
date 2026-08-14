@@ -1,12 +1,7 @@
 {
   "daily": {
-    "run_ts": "2026-08-13T22:38:25+00:00",
-    "qualifying": {
-      "LYV": {
-        "score": 74.92,
-        "direction": "distribution"
-      }
-    }
+    "run_ts": "2026-08-14T22:19:38+00:00",
+    "qualifying": {}
   },
   "weekly": {
     "run_ts": "2026-08-08T14:36:38+00:00",
