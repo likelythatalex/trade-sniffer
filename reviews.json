@@ -106,5 +106,11 @@
     "verdict": "skeptical",
     "model": "claude-haiku-4-5-20251001",
     "date": "2026-08-25"
+  },
+  "daily:AWK": {
+    "text": "**Verdict: skeptical**\n\nThe signal relies heavily on a single false-break event (08-24: spike to 140.13, rejection) paired with relative strength and prior uptrend context. However, the sub-scores reveal significant internal conflict: volume_behavior and spring_upthrust are at -100 (strong accumulation signals), while range_structure sits at -58 (mild distribution lean). The recent bar sequence shows modest, overlapping closes with no sustained demand collapse or climactic selling\u2014more consistent with consolidation than active distribution. Conviction at 70/100 appears inflated given the lack of prior episode history and conflicting momentum signals (+2).\n\n**Concerns:**\n- **Contradictory sub-scores**: volume_behavior flagged as -100 (accumulation) directly undermines a distribution call; if volume is light on the upthrust, that's consistent with a weak rally, not a classic distribution rejection requiring heavy institutional selling pressure.\n- **Thin recent action**: post-rejection bars (08-25, 08-26) show no widening spreads, climactic volume, or panic\u2014just quiet consolidation at resistance; this is neither convincing distribution nor a spring setup.\n- **Recency bias**: the 08-24 spike is the only dramatic event in 10 bars; without prior episode context or multiple rejections, a single wick may be noise rather than institutional markup-to-distribution.\n\n**Recommendation for reviewer:** Request volume profile and order-flow context around 08-24 to confirm whether the rejection had genuine institutional selling. Otherwise, flag for watch rather than high-conviction distribution.",
+    "verdict": "skeptical",
+    "model": "claude-haiku-4-5-20251001",
+    "date": "2026-08-27"
   }
 }
