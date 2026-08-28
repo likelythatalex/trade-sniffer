@@ -1,10 +1,10 @@
 {
   "daily": {
-    "run_ts": "2026-08-27T02:53:33+00:00",
+    "run_ts": "2026-08-28T05:56:49+00:00",
     "qualifying": {
-      "AWK": {
-        "score": 70.36,
-        "direction": "distribution"
+      "CMS": {
+        "score": 73.07,
+        "direction": "accumulation"
       }
     }
   },
