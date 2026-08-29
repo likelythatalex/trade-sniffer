@@ -118,5 +118,17 @@
     "verdict": "mixed",
     "model": "claude-haiku-4-5-20251001",
     "date": "2026-08-28"
+  },
+  "daily:LHX": {
+    "text": "**Verdict: mixed**\n\nLHX shows textbook range structure and volume discipline near support, with a credible spring recovery (8/26 low 258.54 touched range floor, recovered decisively). However, the conviction score overstates accumulation maturity: trend regime (-79) and momentum (-34) are sharply negative, and the single most critical Wyckoff phase\u2014**confirmation (low +11)**\u2014is barely present. Price remains below its moving average, and relative underperformance vs. SPY undermines a bullish setup narrative. The positive news sentiment is a minor tailwind but not a Wyckoff signal. This reads as *early-stage range building* with a bounce, not confirmed accumulation.\n\n**Concerns:**\n- **Confirmation weakness (+11):** No meaningful upside impulse bar(s), volume spike into higher closes, or break above structure since the spring. Last three bars are compressed sideways movement\u2014classic hesitation after a bounce.\n- **Trend regime conflict (-79):** Price still ~5% below the range midpoint (288.5) and below moving average; downtrend context is intact. A true accumulation phase typically includes stabilization of the downtrend *first*.\n- **No prior episode history:** This is the scanner's first flag on this timeframe; without prior accumulation-distribution cycles on LHX, there is no institutional playbook to reference here. Single spring \u2260 conviction.\n\n**Recommendation for reviewer:** Downgrade conviction or hold for confirmation (rally to 280\u2013285 on volume and tighter structure closes). Current signal is \"bounce candidate,\" not \"accumulation in progress.\"",
+    "verdict": "mixed",
+    "model": "claude-haiku-4-5-20251001",
+    "date": "2026-08-29"
+  },
+  "daily:CVS": {
+    "text": "**Verdict: skeptical**\n\nCVS shows textbook range compression and supply-side discipline near support (92.35), but the fundamental setup conflicts severely with accumulation conviction. A 70/100 flag is undermined by strongly negative trend regime (\u201379) and momentum (\u201373)\u2014the price is entrenched below its moving average in an active downtrend. The spring (false break + recovery inside range on 2026-08-21) is weak: only 14 ticks below support, recovered immediately, and has not yet produced a confirmed breakout above the range high (110.0). Positive news sentiment (10 headlines) alone does not override price structure when momentum is deteriorating.\n\n**Concerns:**\n- **Conflicting regime**: Accumulation requires dormancy or early recovery; this is mid-to-late downtrend. Negative trend/momentum flags (\u201379, \u201373) contradict the +88 range structure score\u2014they should carry equal weight.\n- **Spring lacks follow-through**: The false break was shallow and immediate recovery occurred *within* the range, not above it. No confirmation bar; last close (93.06) still sits low in the range with no upside thrust.\n- **News vs. price**: 10 positive headlines have not arrested the downtrend or lifted momentum. Without volume spike or price confirmation above 94.5\u201395.0+, sentiment is noise.\n\n**Recommendation for human review:** Hold this as a watchlist candidate only. Demand a close *above* 95.5 on elevated volume and a 3-bar confirmation before elevated conviction. Current evidence favors continued range-bound weakness, not accumulation.",
+    "verdict": "skeptical",
+    "model": "claude-haiku-4-5-20251001",
+    "date": "2026-08-29"
   }
 }
