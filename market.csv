@@ -1,2 +1,2 @@
 run_ts,timeframe,regime,spy_above_ma,spy_distance_pct,breadth_pct,n_breadth,ma_window
-2026-09-15T23:57:12+00:00,daily,risk-on,True,6.227949016462461,55.62015503875969,516,200
+2026-09-17T00:04:04+00:00,daily,unknown,,,0.0,1,200
