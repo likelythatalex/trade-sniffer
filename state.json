@@ -1,7 +1,12 @@
 {
   "daily": {
-    "run_ts": "2026-09-25T00:15:42+00:00",
-    "qualifying": {}
+    "run_ts": "2026-09-26T00:21:25+00:00",
+    "qualifying": {
+      "STE": {
+        "score": 70.79,
+        "direction": "accumulation"
+      }
+    }
   },
   "weekly": {
     "run_ts": "2026-09-19T17:06:11+00:00",
