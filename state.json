@@ -1,7 +1,20 @@
 {
   "daily": {
-    "run_ts": "2026-10-01T01:03:22+00:00",
-    "qualifying": {}
+    "run_ts": "2026-10-02T01:16:46+00:00",
+    "qualifying": {
+      "ARES": {
+        "score": 74.84,
+        "direction": "accumulation"
+      },
+      "IRM": {
+        "score": 76.87,
+        "direction": "accumulation"
+      },
+      "STE": {
+        "score": 70.63,
+        "direction": "accumulation"
+      }
+    }
   },
   "weekly": {
     "run_ts": "2026-09-26T17:41:09+00:00",
