@@ -154,5 +154,11 @@
     "verdict": "skeptical",
     "model": "claude-haiku-4-5-20251001",
     "date": "2026-10-02"
+  },
+  "daily:NOC": {
+    "text": "**Verdict: mixed**\n\nNOC shows genuine structural accumulation markers (wide range, volume spike into support, recovery wick, volatility compression) but critical momentum and trend misalignments severely weaken conviction. The 73/100 score is inflated by isolated sub-scores (+100 on volume, spring) that mask a deeply conflicted picture: strong negative trend regime (\u201396) and momentum (\u201346) directly contradict the accumulation thesis. A true Wyckoff accumulation typically shows *stabilizing* trend and early momentum lift; this shows the opposite.\n\n**Concerns:**\n- **Trend-confirmation mismatch:** Price remains well below its moving average with negative momentum intact. The recent wick into support is tactically interesting but hasn't yet arrested the downtrend\u2014no higher-low sequence or MA crossover to validate reversal intent.\n- **Confirmation score is vanishingly thin (+5):** The setup lacks follow-through. The Oct 6 close at 483.11 (near range midpoint) is neutral; no surge in relative strength vs. SPY, no volume confirmation bar, no break above recent resistance (514\u2013520). A single wick does not accumulation make.\n- **Spring credibility:** Marked as \"false break below support, recovered inside\" but the 470.06 low is *the* range low and came only 4 bars ago. Insufficient time/structure to confirm this as a textbook spring rather than noise within a continued downtrend.\n\n**Recommendation:** Flag for re-review once price closes decisively above ~510\u2013513 on volume, or shows sustained momentum lift. Currently, the setup is a *potential* candidate but premature to weight heavily.",
+    "verdict": "mixed",
+    "model": "claude-haiku-4-5-20251001",
+    "date": "2026-10-07"
   }
 }
