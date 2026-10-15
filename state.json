@@ -1,12 +1,7 @@
 {
   "daily": {
-    "run_ts": "2026-10-14T00:51:03+00:00",
-    "qualifying": {
-      "NOC": {
-        "score": 70.63,
-        "direction": "accumulation"
-      }
-    }
+    "run_ts": "2026-10-15T00:16:44+00:00",
+    "qualifying": {}
   },
   "weekly": {
     "run_ts": "2026-10-10T18:22:18+00:00",
