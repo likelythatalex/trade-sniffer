@@ -1,0 +1,373 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wyckoff Scan — weekly — 2026-10-17</title>
+  <style>
+    :root { color-scheme: dark;
+            --bg: #0e1117;
+            --fg: #e6e6e6;
+            --line: #8884; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 1.5rem;
+           background: var(--bg); color: var(--fg); }
+    header h1 { margin: 0 0 .25rem; }
+    .summary { opacity: .7; font-size: .9rem; }
+    .layout { display: flex; gap: 1.25rem; align-items: flex-start; margin-top: 1rem; }
+    .list { flex: 0 0 19rem; max-height: 80vh; overflow-y: auto; }
+    .toolbar { display: flex; gap: .4rem; position: sticky; top: 0; background: var(--bg);
+               padding: .1rem 0 .4rem; z-index: 1; }
+    .toolbar input, .toolbar select { font: inherit; font-size: .85rem; color: var(--fg);
+      background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: .25rem .4rem; }
+    .toolbar input { flex: 1 1 auto; min-width: 0; }
+    .toolbar input:focus, .toolbar select:focus { outline: none; border-color: #5aa9ff; }
+    .nomatch { padding: .5rem .6rem; }
+    .panel { flex: 1 1 auto; min-width: 0; }
+    h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; opacity: .7;
+         border-bottom: 1px solid var(--line); padding-bottom: .3rem; margin: 1rem 0 .5rem; }
+    .row { display: flex; align-items: baseline; gap: .5rem; padding: .5rem .6rem;
+           border: 1px solid var(--line); border-radius: 6px; margin: .35rem 0; cursor: pointer; }
+    .row:hover { border-color: #888; }
+    .row.active { border-color: #5aa9ff; background: #5aa9ff1a; }
+    .row .tkr { font-weight: 700; }
+    .row .scr { margin-left: auto; font-weight: 700; }
+    .dir { text-transform: uppercase; font-size: .62rem; padding: .1rem .35rem; border-radius: 4px; }
+    .dir.accumulation { background: #1b5e2099; }
+    .dir.distribution { background: #7f1d1d99; }
+    /* Re-flag badge: this ticker has prior (since-invalidated) episodes on this timeframe. */
+    .reflag { font-size: .58rem; padding: .08rem .3rem; border-radius: 4px; background: #8a6d1d66; }
+    .history { font-size: .82rem; opacity: .85; margin: .4rem 0; padding: .35rem .6rem;
+               border-left: 3px solid #8a6d1d99; background: #8a6d1d14; border-radius: 4px; }
+    .panel-head { display: flex; flex-wrap: wrap; gap: .75rem; align-items: baseline; }
+    .panel-head .tkr { font-size: 1.4rem; font-weight: 700; }
+    .panel-head .scr { font-size: 1.2rem; font-weight: 700; margin-left: auto; }
+    .subscores { font-size: .8rem; opacity: .85; margin: .4rem 0; }
+    .subscores span { margin-right: .8rem; }
+    .reasons { margin: .4rem 0; padding-left: 1.1rem; font-size: .9rem; }
+    .tvlink { font-size: .8rem; }
+    .plan { margin: .6rem 0; border: 1px solid var(--line); border-radius: 6px; padding: .6rem .75rem; background: #5aa9ff14; }
+    .plan-head { font-weight: 700; font-size: .85rem; display: flex; gap: .5rem; align-items: baseline; }
+    .plan-head .rr { margin-left: auto; font-size: .8rem; opacity: .85; }
+    .plan-levels { display: flex; flex-wrap: wrap; gap: .8rem; margin: .4rem 0; font-size: .9rem; }
+    .plan-manage { margin: .3rem 0; padding-left: 1.1rem; font-size: .82rem; opacity: .85; }
+    .plan-note { font-size: .7rem; opacity: .5; }
+    .review { margin: .6rem 0; border: 1px solid var(--line); border-radius: 6px; padding: .6rem .75rem; background: #8881; }
+    .review-text { white-space: pre-wrap; font-size: .9rem; margin-top: .35rem; }
+    .review-meta { font-size: .7rem; opacity: .5; margin-top: .3rem; }
+    .verdict { text-transform: uppercase; font-size: .65rem; padding: .12rem .4rem; border-radius: 4px; background: #8884; }
+    .verdict.aligned { background: #1b5e2099; }
+    .verdict.mixed { background: #8a6d1d99; }
+    .verdict.skeptical { background: #7f1d1d99; }
+    /* The annotated chart is the main event — give it the dominant area (scales with viewport). */
+    #chart { height: 72vh; min-height: 420px; margin-top: .35rem; border: 1px solid var(--line); border-radius: 6px; }
+    #chart:fullscreen { height: 100vh; min-height: 0; border: 0; border-radius: 0; background: var(--bg); }
+    .chart-tools { display: flex; justify-content: flex-end; margin-top: .5rem; }
+    .chart-tools button { font: inherit; font-size: .8rem; cursor: pointer; padding: .2rem .6rem;
+      color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 6px; }
+    .chart-tools button:hover { border-color: #888; }
+    footer { margin-top: 1.5rem; font-size: .85rem; opacity: .7; }
+    .empty { opacity: .6; padding: 2rem 0; }
+    .chart-legend { font-size: .8rem; opacity: .75; line-height: 1.5; margin: .5rem 0 0; }
+    .chart-legend em { font-style: normal; font-weight: 600; }
+    .market { font-size: .9rem; margin: .2rem 0; padding: .25rem .5rem; border-radius: 4px; display: inline-block; }
+    .market.regime-risk-on { background: rgba(38,166,154,.15); }
+    .market.regime-risk-off { background: rgba(239,83,80,.15); }
+    .market.regime-neutral, .market.regime-unknown { background: rgba(128,128,128,.15); }
+    .market-note { opacity: .6; font-size: .8rem; }
+    /* Recently-invalidated setups: collapsed by default (a review aid, not current candidates). */
+    .failed-setups { margin-top: 1.25rem; }
+    .failed-setups summary { cursor: pointer; font-size: .8rem; text-transform: uppercase;
+      letter-spacing: .05em; opacity: .7; }
+    .failed-note { font-size: .72rem; opacity: .55; margin: .4rem 0 .2rem; }
+    .failed-row { display: flex; align-items: baseline; gap: .5rem; padding: .3rem .6rem; opacity: .7; }
+    .failed-row .failed-scr { margin-left: auto; font-variant-numeric: tabular-nums; }
+    /* Mobile: stack the layout and HIDE the chart (keep list/scores/reasons/plan/review).
+       Charting on a phone is covered by the "open in TradingView" link. */
+    @media (max-width: 760px) {
+      body { padding: 1rem; }
+      .layout { flex-direction: column; }
+      .list { flex-basis: auto; width: 100%; max-height: 45vh; }
+      #chart, .chart-tools, .chart-legend { display: none; }
+    }
+  </style>
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Wyckoff Scan — Weekly</h1>
+    
+    <p class="market regime-risk-on">
+      Market: <strong>risk-on</strong> · breadth 53% · SPY +5.5% vs 40-bar MA
+      <span class="market-note">(context only — not yet applied to scores)</span>
+    </p>
+    
+    <p class="summary">
+      Generated 2026-10-17
+      · scanned 521
+      · flagged 0
+      · skipped 4
+      · errored 0
+    </p>
+    
+    <details class="summary">
+      <summary>4 skipped — why</summary>
+      <ul><li>AVB — no data</li><li>FER — only 145/156 valid bars (93% &lt; 95.0%)</li><li>SATS — no data</li><li>WBD — avg dollar-volume $1,238 &lt; $20,000,000 floor</li></ul>
+    </details>
+    
+  </header>
+
+  
+
+  <div class="layout">
+    <aside class="list">
+      <div class="toolbar">
+        <input id="q" type="search" placeholder="filter ticker…" autocomplete="off" aria-label="filter by ticker" />
+        <select id="sort" aria-label="sort candidates">
+          <option value="score-desc">score ↓</option>
+          <option value="score-asc">score ↑</option>
+          <option value="ticker">ticker A–Z</option>
+        </select>
+      </div>
+      <h2>Accumulation — long (<span class="count" id="count-acc">0</span>)</h2>
+      <div class="rows" id="rows-acc"></div>
+      <p class="empty">None flagged.</p>
+      <p class="empty nomatch" id="nomatch-acc" hidden>No matches.</p>
+      <h2>Distribution — short (<span class="count" id="count-dist">0</span>)</h2>
+      <div class="rows" id="rows-dist"></div>
+      <p class="empty">None flagged.</p>
+      <p class="empty nomatch" id="nomatch-dist" hidden>No matches.</p>
+
+      
+    </aside>
+
+    <main class="panel">
+      <div class="panel-head">
+        <span class="tkr" id="p-ticker">—</span>
+        <span class="dir" id="p-dir"></span>
+        <span class="scr" id="p-score"></span>
+      </div>
+      <div class="subscores" id="p-subscores"></div>
+      <div class="history" id="p-history" hidden></div>
+      <ul class="reasons" id="p-reasons"></ul>
+      <div class="plan" id="p-plan" hidden></div>
+      <div class="review" id="p-review" hidden></div>
+      <a class="tvlink" id="p-tvlink" target="_blank" rel="noopener"></a>
+      <div class="chart-tools"><button id="fs-btn" type="button" title="Toggle full screen">⤢ Fullscreen</button></div>
+      <div id="chart"></div>
+      <p class="chart-legend">
+        <strong>Reading the chart (Wyckoff):</strong>
+        dashed band = trading range (<em>Creek</em> = resistance, <em>ICE</em> = support).
+        <em>SC/BC</em> = Selling/Buying Climax that stopped the prior trend.
+        <em>Spring</em> ▲ / <em>UTAD</em> ▼ = the Phase-C shakeout (false break + recovery) —
+        the highest-conviction event. Solid lines = a <em>suggested</em> entry/stop/target,
+        for human review only — never traded. We flag structural fingerprints, not phase labels.
+      </p>
+      <p id="p-empty" class="empty" hidden>No candidates flagged this run.</p>
+    </main>
+  </div>
+
+  <footer>
+    <p>Charts powered by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a>
+       Lightweight Charts™.</p>
+    <p>Educational project — <strong>not financial advice</strong>. Flags candidates for human
+       review; never places trades. Signals can be wrong. Do your own research.</p>
+  </footer>
+
+  <script>
+    const DATA = {};
+    const THEME = "dark";
+    const dark = THEME === "dark";
+    const palette = {
+      bg: "rgba(0,0,0,0)", text: dark ? "#e6e6e6" : "#1a1a1a", grid: dark ? "#ffffff14" : "#0000000d",
+      up: "#26a69a", down: "#ef5350", range: dark ? "#ffd54f" : "#b8860b", marker: "#5aa9ff",
+    };
+
+    let chart = null, candleSeries = null, volSeries = null, priceLines = [];
+
+    function ensureChart() {
+      if (chart) return;
+      const el = document.getElementById("chart");
+      chart = LightweightCharts.createChart(el, {
+        layout: { background: { color: palette.bg }, textColor: palette.text },
+        grid: { vertLines: { color: palette.grid }, horzLines: { color: palette.grid } },
+        rightPriceScale: { borderColor: palette.grid },
+        timeScale: { borderColor: palette.grid },
+        autoSize: true,
+      });
+      candleSeries = chart.addCandlestickSeries({
+        upColor: palette.up, downColor: palette.down,
+        wickUpColor: palette.up, wickDownColor: palette.down, borderVisible: false,
+      });
+      volSeries = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "vol" });
+      chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+    }
+
+    function chartVisible() {
+      // The chart is hidden on mobile via CSS; skip chart work (and avoid creating a
+      // zero-size chart) when the container isn't displayed.
+      return getComputedStyle(document.getElementById("chart")).display !== "none";
+    }
+
+    function drawChart(c) {
+      ensureChart();
+      candleSeries.setData(c.chart.candles);
+      volSeries.setData(c.chart.volume.map((b) => ({
+        time: b.time, value: b.value, color: (b.up ? palette.up : palette.down) + "80",
+      })));
+
+      // Annotations: range band (Creek/ICE) + Wyckoff event markers.
+      // Clear the previous ticker's lines first — setData doesn't remove price lines.
+      priceLines.forEach((pl) => candleSeries.removePriceLine(pl));
+      priceLines = [];
+      if (c.chart.range_high != null)
+        priceLines.push(candleSeries.createPriceLine({ price: c.chart.range_high, color: palette.range, lineStyle: 2, title: "range high (Creek)" }));
+      if (c.chart.range_low != null)
+        priceLines.push(candleSeries.createPriceLine({ price: c.chart.range_low, color: palette.range, lineStyle: 2, title: "range low (ICE)" }));
+      // Suggested trade plan: entry/stop/target as solid lines (range band is dashed above).
+      if (c.plan) {
+        priceLines.push(candleSeries.createPriceLine({ price: c.plan.entry, color: palette.marker, lineStyle: 0, title: "entry" }));
+        priceLines.push(candleSeries.createPriceLine({ price: c.plan.stop, color: palette.down, lineStyle: 0, title: "stop" }));
+        priceLines.push(candleSeries.createPriceLine({ price: c.plan.target, color: palette.up, lineStyle: 0, title: "target" }));
+      }
+      // Map each Wyckoff event type to its glyph. Spring/UTAD = Phase-C shake (arrow);
+      // SC/BC = the climax that stopped the prior trend (circle).
+      const MARKER_STYLE = {
+        spring:         { position: "belowBar", shape: "arrowUp",   text: "Spring", color: palette.marker },
+        upthrust:       { position: "aboveBar", shape: "arrowDown", text: "UTAD",   color: palette.marker },
+        selling_climax: { position: "belowBar", shape: "circle",    text: "SC",     color: palette.up },
+        buying_climax:  { position: "aboveBar", shape: "circle",    text: "BC",     color: palette.down },
+      };
+      const markers = (c.chart.markers || [])
+        .filter((m) => MARKER_STYLE[m.type])
+        .map((m) => ({ time: m.time, ...MARKER_STYLE[m.type] }))
+        .sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));  // setMarkers needs ascending time
+      candleSeries.setMarkers(markers);
+      chart.timeScale().fitContent();
+    }
+
+    function render(ticker) {
+      const c = DATA[ticker];
+      if (!c) return;
+      // Chart is hidden on mobile (CSS) — skip drawing it there; everything below still renders.
+      if (chartVisible()) drawChart(c);
+
+      // Header / details.
+      document.getElementById("p-ticker").textContent = c.ticker;
+      const dir = document.getElementById("p-dir");
+      dir.textContent = c.direction; dir.className = "dir " + c.direction;
+      document.getElementById("p-score").textContent = c.score.toFixed(0) + "/100";
+      document.getElementById("p-subscores").innerHTML =
+        Object.entries(c.sub_scores).map(([k, v]) => `<span>${k}: ${v >= 0 ? "+" : ""}${v.toFixed(0)}</span>`).join("");
+      document.getElementById("p-reasons").innerHTML = (c.reasons || []).map((r) => `<li>${r}</li>`).join("");
+
+      // Episode history (app-generated text → textContent is safe). Hidden for first-time flags.
+      const hist = document.getElementById("p-history");
+      if (c.episode_history) { hist.hidden = false; hist.textContent = "↻ " + c.episode_history; }
+      else { hist.hidden = true; }
+
+      // Suggested trade plan (precomputed, display-only — these values are app-generated
+      // numbers + our own management strings, so innerHTML is safe here; never auto-traded).
+      const planEl = document.getElementById("p-plan");
+      if (c.plan) {
+        const p = c.plan;
+        planEl.hidden = false;
+        planEl.innerHTML =
+          `<div class="plan-head">Suggested plan <span class="rr">R:R ${p.reward_risk.toFixed(2)}</span></div>` +
+          `<div class="plan-levels">` +
+            `<span>Entry <b>${p.entry}</b></span>` +
+            `<span>Stop <b>${p.stop}</b></span>` +
+            `<span>Target <b>${p.target}</b></span>` +
+            `<span>Size <b>${p.size_shares}</b> sh</span>` +
+            `<span>Risk <b>$${p.risk_amount}</b></span>` +
+          `</div>` +
+          `<ul class="plan-manage">` + (p.management || []).map((m) => `<li>${m}</li>`).join("") + `</ul>` +
+          `<div class="plan-note">Suggested levels for human review — never auto-traded.</div>`;
+      } else {
+        planEl.hidden = true;
+      }
+
+      // Agent review (precomputed). Use textContent for the model output — it's LLM-generated
+      // and this page is public, so never inject it as HTML.
+      const rev = document.getElementById("p-review");
+      rev.innerHTML = "";
+      if (c.review && c.review.text) {
+        rev.hidden = false;
+        const v = c.review.verdict || "n/a";
+        const badge = document.createElement("span");
+        badge.className = "verdict " + v;
+        badge.textContent = "AI due-diligence: " + v;
+        const body = document.createElement("div");
+        body.className = "review-text";
+        body.textContent = c.review.text;
+        rev.appendChild(badge); rev.appendChild(body);
+        if (c.review.model) {
+          const meta = document.createElement("div");
+          meta.className = "review-meta";
+          meta.textContent = "model: " + c.review.model + " · analyst notes for human review, not advice";
+          rev.appendChild(meta);
+        }
+      } else {
+        rev.hidden = true;
+      }
+
+      const link = document.getElementById("p-tvlink");
+      link.href = "https://www.tradingview.com/chart/?symbol=" + encodeURIComponent(c.symbol || c.ticker);
+      link.textContent = "Open " + (c.symbol || c.ticker) + " in TradingView ↗";
+
+      document.querySelectorAll(".row").forEach((r) => r.classList.toggle("active", r.dataset.ticker === ticker));
+    }
+
+    document.querySelectorAll(".row").forEach((r) => r.addEventListener("click", () => render(r.dataset.ticker)));
+
+    // Client-side filter + sort of the candidate list (all data is already in the page; no
+    // backend). Re-orders the SAME row elements, so their click handlers survive.
+    const qInput = document.getElementById("q");
+    const sortSel = document.getElementById("sort");
+    function applyView() {
+      const term = qInput.value.trim().toUpperCase();
+      const mode = sortSel.value;
+      [["rows-acc", "count-acc", "nomatch-acc"], ["rows-dist", "count-dist", "nomatch-dist"]].forEach(
+        ([rowsId, countId, noMatchId]) => {
+          const box = document.getElementById(rowsId);
+          if (!box) return;
+          const rows = Array.from(box.children);
+          let visible = 0;
+          rows.forEach((r) => {
+            const show = !term || r.dataset.ticker.includes(term);
+            r.style.display = show ? "" : "none";
+            if (show) visible++;
+          });
+          rows.sort((a, b) => {
+            if (mode === "ticker") return a.dataset.ticker < b.dataset.ticker ? -1 : 1;
+            const sa = parseFloat(a.dataset.score), sb = parseFloat(b.dataset.score);
+            return mode === "score-asc" ? sa - sb : sb - sa;
+          });
+          rows.forEach((r) => box.appendChild(r));  // re-append in sorted order
+          const count = document.getElementById(countId);
+          if (count) count.textContent = term ? `${visible}/${rows.length}` : `${rows.length}`;
+          const noMatch = document.getElementById(noMatchId);
+          if (noMatch) noMatch.hidden = !(rows.length > 0 && visible === 0);
+        }
+      );
+    }
+    if (qInput && sortSel) {
+      qInput.addEventListener("input", applyView);
+      sortSel.addEventListener("change", applyView);
+    }
+
+    // Fullscreen toggle for the chart (autoSize resizes it via its ResizeObserver).
+    document.getElementById("fs-btn").addEventListener("click", () => {
+      const el = document.getElementById("chart");
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (el.requestFullscreen) el.requestFullscreen();
+    });
+
+    // Select the top candidate on load (accumulation first, then distribution).
+    const first = document.querySelector(".row");
+    if (first) { render(first.dataset.ticker); }
+    else { document.getElementById("chart").hidden = true; document.getElementById("p-empty").hidden = false; }
+  </script>
+</body>
+</html>
